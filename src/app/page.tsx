@@ -126,10 +126,10 @@ export default function HomePage() {
                     <p className="text-xs text-charcoal-muted">
                       Paediatric Surgeon & Paediatric Urologist
                     </p>
-                    <div className="text-[10px] text-slate-400 pt-1 flex items-center gap-1 border-t border-slate-100">
-                      <span>Concept Portrait</span>
+                    <div className="text-[10px] text-teal-dark pt-1 flex items-center gap-1 border-t border-slate-100 font-medium">
+                      <span>MCh Paediatric Surgery</span>
                       <span>•</span>
-                      <span>Pending Doctor&apos;s High-Res Approved Photo</span>
+                      <span>New Life Clinic, Bhubaneswar</span>
                     </div>
                   </div>
                 </div>
