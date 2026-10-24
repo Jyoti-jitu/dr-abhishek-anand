@@ -530,6 +530,13 @@ export default function HomePage() {
                   <Phone className="w-4 h-4" />
                   <span>Call {CLINIC_DETAILS.phone}</span>
                 </a>
+                <Link
+                  href="/appointments"
+                  className="inline-flex items-center gap-2 px-5 py-3 rounded-lg bg-teal-light text-teal-dark border border-teal/20 hover:bg-teal-subtle text-sm font-semibold transition-all"
+                >
+                  <Calendar className="w-4 h-4 text-teal" />
+                  <span>Appointments & Queue</span>
+                </Link>
                 <a
                   href={CLINIC_DETAILS.googleMapsQuery}
                   target="_blank"
@@ -537,7 +544,7 @@ export default function HomePage() {
                   className="inline-flex items-center gap-2 px-5 py-3 rounded-lg bg-white border border-border-subtle text-charcoal hover:bg-light-bg text-sm font-semibold transition-all"
                 >
                   <MapPin className="w-4 h-4 text-teal" />
-                  <span>Open in Google Maps</span>
+                  <span>Open in Maps</span>
                 </a>
               </div>
             </div>

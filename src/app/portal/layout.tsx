@@ -1,5 +1,6 @@
 import React from "react";
 import { redirect } from "next/navigation";
+import { connection } from "next/server";
 import { getAuthenticatedUser } from "@/lib/auth/session";
 import PortalClientLayout from "./PortalClientLayout";
 
@@ -8,6 +9,7 @@ export default async function PortalLayout({
 }: {
   children: React.ReactNode;
 }) {
+  await connection();
   const user = await getAuthenticatedUser();
 
   if (!user) {

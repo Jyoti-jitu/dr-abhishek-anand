@@ -4,7 +4,7 @@ import { requireUserWithRole } from "@/lib/auth/session";
 
 export async function GET(req: NextRequest) {
   try {
-    const authResult = await requireUserWithRole(["ADMIN", "BILLING", "DOCTOR"]);
+    const authResult = await requireUserWithRole(["ADMIN", "BILLING", "DOCTOR", "RECEPTIONIST"]);
     if ("error" in authResult) {
       return NextResponse.json({ error: authResult.error }, { status: authResult.status });
     }

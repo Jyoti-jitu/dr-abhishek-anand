@@ -26,10 +26,8 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
     const documents = clinicDb.listPatientDocuments(patient.id);
     const appointments = clinicDb.listAppointments(undefined, undefined).filter(a => a.patientId === patient.id);
     
-    // Billing history: authorized for Admin, Billing, and Doctor
-    const invoices = (currentUser.role === "ADMIN" || currentUser.role === "BILLING" || currentUser.role === "DOCTOR")
-      ? clinicDb.listInvoices(patient.id)
-      : [];
+    // Billing history: accessible to both Doctor & Admin and Reception & Billing roles
+    const invoices = clinicDb.listInvoices(patient.id);
 
     return NextResponse.json({
       success: true,

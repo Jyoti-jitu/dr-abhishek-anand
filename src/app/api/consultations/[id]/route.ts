@@ -8,7 +8,7 @@ interface RouteParams {
 
 export async function GET(req: NextRequest, { params }: RouteParams) {
   try {
-    const authResult = await requireUserWithRole(["ADMIN", "DOCTOR", "RECEPTIONIST"]);
+    const authResult = await requireUserWithRole(["ADMIN", "DOCTOR", "RECEPTIONIST", "BILLING"]);
     if ("error" in authResult) {
       return NextResponse.json({ error: authResult.error }, { status: authResult.status });
     }

@@ -60,6 +60,9 @@ export default function PortalClientLayout({ user, children }: Props) {
     }
   };
 
+  const isDoctorAdmin = user.role === "DOCTOR" || user.role === "ADMIN";
+  const isReceptionBilling = user.role === "RECEPTIONIST" || user.role === "BILLING";
+
   const navLinks = [
     {
       label: "Doctor Dashboard",
@@ -71,58 +74,58 @@ export default function PortalClientLayout({ user, children }: Props) {
       label: "Patient Management",
       href: "/portal/patients",
       icon: <Users className="w-4 h-4" />,
-      roles: ["DOCTOR", "RECEPTIONIST", "ADMIN", "BILLING"]
+      roles: ["DOCTOR", "ADMIN", "RECEPTIONIST", "BILLING"]
     },
     {
       label: "Digital EMR & Notes",
       href: "/portal/consultations",
       icon: <FileText className="w-4 h-4" />,
-      roles: ["DOCTOR", "ADMIN", "RECEPTIONIST"]
+      roles: ["DOCTOR", "ADMIN"]
     },
     {
       label: "Prescriptions (Rx)",
       href: "/portal/prescriptions",
       icon: <Pill className="w-4 h-4" />,
-      roles: ["DOCTOR", "ADMIN", "RECEPTIONIST"]
+      roles: ["DOCTOR", "ADMIN"]
     },
     {
       label: "Appointments & Queue",
       href: "/portal/appointments",
       icon: <Calendar className="w-4 h-4" />,
-      roles: ["RECEPTIONIST", "DOCTOR", "ADMIN", "BILLING"]
+      roles: ["DOCTOR", "ADMIN", "RECEPTIONIST", "BILLING"]
     },
     {
       label: "Billing & Reports",
       href: "/portal/billing",
       icon: <CreditCard className="w-4 h-4" />,
-      roles: ["BILLING", "ADMIN", "DOCTOR"]
+      roles: ["DOCTOR", "ADMIN", "RECEPTIONIST", "BILLING"]
     },
     {
       label: "Clinic Admin & Audit",
       href: "/portal/admin",
       icon: <ShieldCheck className="w-4 h-4" />,
-      roles: ["ADMIN"]
+      roles: ["DOCTOR", "ADMIN", "RECEPTIONIST", "BILLING"]
     }
   ];
 
-  // Filter links authorized for current role
-  const authorizedLinks = navLinks.filter(
-    link => user.role === "ADMIN" || link.roles.includes(user.role)
-  );
+  // Filter links authorized for current role (Two-Role Model)
+  const authorizedLinks = navLinks.filter(link => {
+    if (isDoctorAdmin) return true; // Doctor & Admin has access to all modules
+    return link.roles.some(r => r === "RECEPTIONIST" || r === "BILLING");
+  });
+
+  const getRoleDisplayName = (role: string) => {
+    if (role === "DOCTOR" || role === "ADMIN") {
+      return "Doctor & Admin";
+    }
+    return "Reception & Billing";
+  };
 
   const getRoleBadgeColor = (role: string) => {
-    switch (role) {
-      case "DOCTOR":
-        return "bg-teal-light text-teal-dark border-teal/30";
-      case "ADMIN":
-        return "bg-purple-100 text-purple-800 border-purple-200";
-      case "RECEPTIONIST":
-        return "bg-blue-50 text-blue-800 border-blue-200";
-      case "BILLING":
-        return "bg-amber-50 text-amber-800 border-amber-200";
-      default:
-        return "bg-slate-100 text-slate-800";
+    if (role === "DOCTOR" || role === "ADMIN") {
+      return "bg-teal-light text-teal-dark border-teal/30";
     }
+    return "bg-blue-50 text-blue-800 border-blue-200";
   };
 
   return (
@@ -135,7 +138,7 @@ export default function PortalClientLayout({ user, children }: Props) {
         </div>
         <div className="flex items-center gap-2">
           <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${getRoleBadgeColor(user.role)}`}>
-            {user.role}
+            {getRoleDisplayName(user.role)}
           </span>
           <button
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
@@ -213,55 +216,56 @@ export default function PortalClientLayout({ user, children }: Props) {
             })}
           </nav>
 
-          {/* Quick Role Switcher for Reviewing */}
+          {/* Quick Role Switcher for 2-Role System */}
           <div className="pt-6 px-3 space-y-2">
             <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
-              Test Different Roles:
+              Active Role (2 Roles):
             </span>
-            <div className="grid grid-cols-2 gap-1.5 text-[11px]">
+            <div className="grid grid-cols-1 gap-1.5 text-xs">
               <button
-                disabled={isSwitching || user.role === "DOCTOR"}
+                disabled={isSwitching || isDoctorAdmin}
                 onClick={() => handleQuickSwitch("dr.anand", "Doctor@2026")}
-                className={`px-2 py-1.5 rounded text-left transition-colors cursor-pointer ${
-                  user.role === "DOCTOR"
-                    ? "bg-teal text-white font-semibold"
-                    : "bg-navy-dark hover:bg-white/10 text-slate-300"
+                className={`p-2.5 rounded-lg text-left transition-all cursor-pointer flex items-center justify-between border ${
+                  isDoctorAdmin
+                    ? "bg-teal text-white font-semibold border-teal/40 shadow-xs"
+                    : "bg-navy-dark hover:bg-white/10 text-slate-300 border-transparent"
                 }`}
               >
-                Doctor
+                <div>
+                  <div className="font-semibold text-xs flex items-center gap-1.5">
+                    <Stethoscope className="w-3.5 h-3.5 text-teal-light" />
+                    Doctor & Admin
+                  </div>
+                  <div className="text-[10px] text-slate-300 opacity-80 mt-0.5">Dr. Abhishek Anand</div>
+                </div>
+                {isDoctorAdmin && (
+                  <span className="text-[9px] bg-white/20 px-1.5 py-0.5 rounded font-bold uppercase tracking-wider">
+                    Active
+                  </span>
+                )}
               </button>
+
               <button
-                disabled={isSwitching || user.role === "RECEPTIONIST"}
+                disabled={isSwitching || isReceptionBilling}
                 onClick={() => handleQuickSwitch("reception", "Reception@2026")}
-                className={`px-2 py-1.5 rounded text-left transition-colors cursor-pointer ${
-                  user.role === "RECEPTIONIST"
-                    ? "bg-teal text-white font-semibold"
-                    : "bg-navy-dark hover:bg-white/10 text-slate-300"
+                className={`p-2.5 rounded-lg text-left transition-all cursor-pointer flex items-center justify-between border ${
+                  isReceptionBilling
+                    ? "bg-medical text-white font-semibold border-teal/40 shadow-xs"
+                    : "bg-navy-dark hover:bg-white/10 text-slate-300 border-transparent"
                 }`}
               >
-                Reception
-              </button>
-              <button
-                disabled={isSwitching || user.role === "BILLING"}
-                onClick={() => handleQuickSwitch("billing", "Billing@2026")}
-                className={`px-2 py-1.5 rounded text-left transition-colors cursor-pointer ${
-                  user.role === "BILLING"
-                    ? "bg-teal text-white font-semibold"
-                    : "bg-navy-dark hover:bg-white/10 text-slate-300"
-                }`}
-              >
-                Billing
-              </button>
-              <button
-                disabled={isSwitching || user.role === "ADMIN"}
-                onClick={() => handleQuickSwitch("admin", "Admin@2026")}
-                className={`px-2 py-1.5 rounded text-left transition-colors cursor-pointer ${
-                  user.role === "ADMIN"
-                    ? "bg-teal text-white font-semibold"
-                    : "bg-navy-dark hover:bg-white/10 text-slate-300"
-                }`}
-              >
-                Admin
+                <div>
+                  <div className="font-semibold text-xs flex items-center gap-1.5">
+                    <Users className="w-3.5 h-3.5 text-teal-light" />
+                    Reception & Billing
+                  </div>
+                  <div className="text-[10px] text-slate-300 opacity-80 mt-0.5">Front Desk & Accounts</div>
+                </div>
+                {isReceptionBilling && (
+                  <span className="text-[9px] bg-white/20 px-1.5 py-0.5 rounded font-bold uppercase tracking-wider">
+                    Active
+                  </span>
+                )}
               </button>
             </div>
           </div>
@@ -275,7 +279,7 @@ export default function PortalClientLayout({ user, children }: Props) {
                 {user.fullName}
               </p>
               <span className={`inline-block text-[10px] font-semibold px-2 py-0.5 rounded border mt-0.5 ${getRoleBadgeColor(user.role)}`}>
-                {user.role}
+                {getRoleDisplayName(user.role)}
               </span>
             </div>
             <button
@@ -320,7 +324,7 @@ export default function PortalClientLayout({ user, children }: Props) {
               <span className="text-charcoal-muted">Logged in as:</span>
               <span className="font-bold text-navy">{user.fullName}</span>
               <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${getRoleBadgeColor(user.role)}`}>
-                {user.role}
+                {getRoleDisplayName(user.role)}
               </span>
             </div>
             <button

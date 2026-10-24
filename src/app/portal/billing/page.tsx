@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { 
   CreditCard, 
@@ -28,8 +29,10 @@ import {
 interface Patient {
   id: string;
   fullName: string;
-  guardianName: string;
-  phone: string;
+  guardianName?: string;
+  parentGuardianName?: string;
+  phone?: string;
+  contactNumber?: string;
 }
 
 interface InvoiceItem {
@@ -82,7 +85,10 @@ const PRESET_SERVICES = [
   { name: "Emergency Surgical Triage", price: 750 }
 ];
 
-export default function BillingPage() {
+function BillingContent() {
+  const searchParams = useSearchParams();
+  const urlPatientId = searchParams.get("patientId");
+
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [patients, setPatients] = useState<Patient[]>([]);
   const [report, setReport] = useState<FinancialReport | null>(null);
@@ -90,6 +96,8 @@ export default function BillingPage() {
   const [statusFilter, setStatusFilter] = useState<string>("ALL");
   const [searchTerm, setSearchTerm] = useState("");
   const [actionMessage, setActionMessage] = useState<{ text: string; type: "success" | "error" } | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [modalError, setModalError] = useState("");
 
   // Modals
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -145,6 +153,13 @@ export default function BillingPage() {
     loadData();
   }, []);
 
+  useEffect(() => {
+    if (urlPatientId) {
+      setNewInvData((prev) => ({ ...prev, patientId: urlPatientId }));
+      setShowCreateModal(true);
+    }
+  }, [urlPatientId]);
+
   const handleAddItem = (preset?: { name: string; price: number }) => {
     if (preset) {
       setInvItems([...invItems, { serviceName: preset.name, unitPrice: preset.price, quantity: 1 }]);
@@ -170,18 +185,27 @@ export default function BillingPage() {
 
   const handleCreateInvoice = async (e: React.FormEvent) => {
     e.preventDefault();
+    setModalError("");
+
     if (!newInvData.patientId) {
-      setActionMessage({ text: "Please select a patient.", type: "error" });
+      setModalError("Please select a registered patient from the list.");
       return;
     }
 
+    const validItems = invItems.filter((i) => i.serviceName.trim() !== "");
+    if (validItems.length === 0) {
+      setModalError("Please specify at least one clinical service item.");
+      return;
+    }
+
+    setIsSubmitting(true);
     try {
       const res = await fetch("/api/billing/invoices", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           patientId: newInvData.patientId,
-          items: invItems,
+          items: validItems,
           taxPercent: newInvData.taxPercent,
           discountAmount: newInvData.discountAmount,
           paidAmount: newInvData.paidAmount,
@@ -196,11 +220,15 @@ export default function BillingPage() {
 
       setActionMessage({ text: `Invoice ${data.invoice.invoiceNumber} created successfully!`, type: "success" });
       setShowCreateModal(false);
+      setModalError("");
       setShowReceiptModal(data.invoice);
       loadData();
     } catch (err: unknown) {
       const e = err as Error;
+      setModalError(e.message);
       setActionMessage({ text: e.message, type: "error" });
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -383,7 +411,7 @@ export default function BillingPage() {
                   : "bg-slate-100 text-slate-600 hover:bg-slate-200"
               }`}
             >
-              {st.replace("_", " ")}
+              {(st || "").replace("_", " ")}
             </button>
           ))}
           <button
@@ -433,7 +461,7 @@ export default function BillingPage() {
                       {inv.patient?.fullName || inv.patientId}
                     </Link>
                     <span className="text-[11px] text-slate-500">
-                      {inv.patient?.guardianName ? `Guardian: ${inv.patient.guardianName}` : "Patient"}
+                      {inv.patient?.parentGuardianName ? `Guardian: ${inv.patient.parentGuardianName}` : (inv.patient as any)?.guardianName ? `Guardian: ${(inv.patient as any).guardianName}` : "Patient"}
                     </span>
                   </td>
 
@@ -467,7 +495,7 @@ export default function BillingPage() {
                         ? "bg-amber-50 text-amber-700 border border-amber-200"
                         : "bg-red-50 text-red-700 border border-red-200"
                     }`}>
-                      {inv.paymentStatus.replace("_", " ")}
+                      {(inv.paymentStatus || "PENDING").replace("_", " ")}
                     </span>
                     <span className="block text-[10px] text-slate-500 font-mono mt-0.5">
                       {inv.paymentMethod || "Pending"}
@@ -512,27 +540,48 @@ export default function BillingPage() {
                 <h3 className="text-base font-bold text-[#12304A]">Generate Clinical Invoice</h3>
                 <p className="text-xs text-slate-500">New Life Clinic, Soubhagya Nagar, Bhubaneswar</p>
               </div>
-              <button onClick={() => setShowCreateModal(false)} className="text-slate-400 hover:text-slate-600 text-lg">
+              <button 
+                type="button"
+                onClick={() => {
+                  setShowCreateModal(false);
+                  setModalError("");
+                }} 
+                className="text-slate-400 hover:text-slate-600 text-lg"
+              >
                 &times;
               </button>
             </div>
 
             <form onSubmit={handleCreateInvoice} className="space-y-4 text-xs">
+              {/* Inline Modal Error Banner */}
+              {modalError && (
+                <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-xs text-red-700 flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
+                  <span className="font-medium">{modalError}</span>
+                </div>
+              )}
+
               {/* Patient Selection */}
               <div>
                 <label className="block font-bold text-slate-700 mb-1">Select Patient *</label>
                 <select
                   required
                   value={newInvData.patientId}
-                  onChange={(e) => setNewInvData({ ...newInvData, patientId: e.target.value })}
+                  onChange={(e) => {
+                    setNewInvData({ ...newInvData, patientId: e.target.value });
+                    if (modalError) setModalError("");
+                  }}
                   className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:ring-2 focus:ring-[#1769D2] outline-none"
                 >
-                  <option value="">-- Choose Registered Patient --</option>
-                  {patients.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.fullName} ({p.id}) — Guardian: {p.guardianName}
-                    </option>
-                  ))}
+                  <option value="">-- Choose Registered Patient ({patients.length} available) --</option>
+                  {patients.map((p) => {
+                    const guardian = p.parentGuardianName || p.guardianName || "N/A";
+                    return (
+                      <option key={p.id} value={p.id}>
+                        {p.fullName} ({p.id}) — Guardian: {guardian}
+                      </option>
+                    );
+                  })}
                 </select>
               </div>
 
@@ -648,9 +697,18 @@ export default function BillingPage() {
                   />
                 </div>
 
-                <div className="flex justify-between text-sm font-bold text-[#12304A] border-t border-slate-200 pt-2">
+                <div className="flex items-center justify-between text-sm font-bold text-[#12304A] border-t border-slate-200 pt-2">
                   <span>Net Payable Amount:</span>
-                  <span className="font-mono text-base text-[#1769D2]">₹{calculateNetTotal()}</span>
+                  <div className="flex items-center gap-3">
+                    <span className="font-mono text-base text-[#1769D2]">₹{calculateNetTotal()}</span>
+                    <button
+                      type="button"
+                      onClick={() => setNewInvData({ ...newInvData, paidAmount: calculateNetTotal() })}
+                      className="text-[11px] font-bold text-[#1769D2] hover:underline bg-blue-50 hover:bg-blue-100 px-2.5 py-1 rounded-lg transition-colors border border-blue-200"
+                    >
+                      Set Full Payment
+                    </button>
+                  </div>
                 </div>
               </div>
 
@@ -697,16 +755,30 @@ export default function BillingPage() {
               <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
                 <button
                   type="button"
-                  onClick={() => setShowCreateModal(false)}
-                  className="px-4 py-2 border border-slate-200 text-slate-600 rounded-xl hover:bg-slate-100"
+                  onClick={() => {
+                    setShowCreateModal(false);
+                    setModalError("");
+                  }}
+                  className="px-4 py-2 border border-slate-200 text-slate-600 rounded-xl hover:bg-slate-100 font-medium"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 bg-[#1769D2] text-white rounded-xl font-bold hover:bg-[#1258b5] shadow-sm"
+                  disabled={isSubmitting}
+                  className="px-5 py-2.5 bg-[#1769D2] text-white rounded-xl font-bold hover:bg-[#1258b5] shadow-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                 >
-                  Issue Invoice & Receipt
+                  {isSubmitting ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                      <span>Issuing Invoice & Receipt...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Receipt className="w-4 h-4" />
+                      <span>Issue Invoice & Receipt</span>
+                    </>
+                  )}
                 </button>
               </div>
             </form>
@@ -822,7 +894,7 @@ export default function BillingPage() {
               <div className="text-center border-b border-slate-200 pb-4">
                 <h2 className="text-lg font-black text-[#12304A]">NEW LIFE CLINIC</h2>
                 <p className="text-xs font-semibold text-slate-700">Paediatric Surgery & Child Wellness</p>
-                <p className="text-[11px] text-slate-500">Soubhagya Nagar, Bhubaneswar, Odisha • Helpline: +91 94372 05244</p>
+                <p className="text-[11px] text-slate-500">Soubhagya Nagar, Bhubaneswar, Odisha • Helpline: +91 91246 16273</p>
                 <div className="mt-2 inline-block px-3 py-0.5 rounded bg-blue-50 text-[#1769D2] font-mono text-[10px] font-bold">
                   TAX INVOICE & MONEY RECEIPT
                 </div>
@@ -844,7 +916,7 @@ export default function BillingPage() {
                 </div>
                 <div>
                   <span className="text-slate-400 block font-medium">Payment Status</span>
-                  <span className="font-bold text-emerald-700 uppercase">{showReceiptModal.paymentStatus.replace("_", " ")}</span>
+                  <span className="font-bold text-emerald-700 uppercase">{(showReceiptModal.paymentStatus || "PAID").replace("_", " ")}</span>
                 </div>
               </div>
 
@@ -914,5 +986,13 @@ export default function BillingPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function BillingPage() {
+  return (
+    <Suspense fallback={<div className="p-8 text-center text-slate-500 font-medium">Loading clinical billing system...</div>}>
+      <BillingContent />
+    </Suspense>
   );
 }

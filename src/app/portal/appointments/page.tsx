@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useState, useTransition, Suspense } from "react";
 import Link from "next/link";
 import { 
   Calendar as CalendarIcon, 
@@ -15,12 +15,12 @@ import {
   UserCheck, 
   PlayCircle, 
   XCircle, 
-  RefreshCw,
-  Phone,
-  Ticket,
-  ChevronRight,
-  Stethoscope,
-  ChevronLeft
+  RefreshCw, 
+  Phone, 
+  Ticket, 
+  ChevronRight, 
+  Stethoscope, 
+  ChevronLeft 
 } from "lucide-react";
 
 interface Patient {
@@ -28,8 +28,10 @@ interface Patient {
   fullName: string;
   dateOfBirth: string;
   gender: string;
-  guardianName: string;
-  phone: string;
+  guardianName?: string;
+  parentGuardianName?: string;
+  phone?: string;
+  contactNumber?: string;
 }
 
 interface Appointment {
@@ -68,7 +70,7 @@ const OPD_SLOTS = [
   "08:00 PM", "08:20 PM", "08:40 PM"
 ];
 
-export default function AppointmentsQueuePage() {
+function AppointmentsQueueContent() {
   const [activeTab, setActiveTab] = useState<"QUEUE" | "SCHEDULE">("QUEUE");
   const [selectedDate, setSelectedDate] = useState<string>("2026-10-24");
   const [statusFilter, setStatusFilter] = useState<string>("ALL");
@@ -117,7 +119,22 @@ export default function AppointmentsQueuePage() {
         patientsRes.json()
       ]);
 
-      if (qData.success) setQueue(qData.queue || []);
+      if (qData.success) {
+        const normalizedQueue: QueueEntry[] = (qData.queue || []).map((entry: any) => ({
+          id: entry.id,
+          tokenCode: entry.tokenCode,
+          patientId: entry.patientId,
+          patientName: entry.patient?.fullName || entry.patientName || "Unknown Patient",
+          guardianName: entry.patient?.parentGuardianName || entry.guardianName || "N/A",
+          appointmentId: entry.appointmentId,
+          doctorId: entry.doctorId,
+          status: (entry.queueStatus || entry.status || "WAITING") as any,
+          checkInTime: entry.checkInTime ? new Date(entry.checkInTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "N/A",
+          consultationStartTime: entry.consultationStartTime,
+          priorityLevel: entry.priorityLevel || "NORMAL"
+        }));
+        setQueue(normalizedQueue);
+      }
       if (aData.success) setAppointments(aData.appointments || []);
       if (pData.success) setPatients(pData.patients || []);
     } catch {
@@ -428,7 +445,7 @@ export default function AppointmentsQueuePage() {
                               ? "bg-emerald-100 text-emerald-800"
                               : "bg-red-100 text-red-700"
                           }`}>
-                            {entry.status.replace("_", " ")}
+                            {(entry.status || "WAITING").replace("_", " ")}
                           </span>
                           {entry.priorityLevel === "EMERGENCY" && (
                             <span className="bg-red-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded animate-pulse">
@@ -522,7 +539,7 @@ export default function AppointmentsQueuePage() {
                     : "bg-slate-100 text-slate-600 hover:bg-slate-200"
                 }`}
               >
-                {st.replace("_", " ")}
+                {(st || "").replace("_", " ")}
               </button>
             ))}
           </div>
@@ -565,12 +582,12 @@ export default function AppointmentsQueuePage() {
                           {a.patient?.fullName || a.patientId}
                         </Link>
                         <span className="text-[11px] text-slate-500">
-                          {a.patient?.guardianName ? `Guardian: ${a.patient.guardianName}` : "Paediatric Patient"}
+                          {a.patient?.parentGuardianName ? `Guardian: ${a.patient.parentGuardianName}` : (a.patient as any)?.guardianName ? `Guardian: ${(a.patient as any).guardianName}` : "Paediatric Patient"}
                         </span>
                       </td>
 
                       <td className="py-3.5 px-4 font-semibold text-slate-700">
-                        {a.consultationType.replace("_", " ")}
+                        {(a.consultationType || "GENERAL").replace("_", " ")}
                       </td>
 
                       <td className="py-3.5 px-4 text-slate-600 max-w-xs truncate">
@@ -585,7 +602,7 @@ export default function AppointmentsQueuePage() {
                           a.status === "COMPLETED" ? "bg-emerald-50 text-emerald-700 border border-emerald-200" :
                           "bg-slate-100 text-slate-500"
                         }`}>
-                          {a.status.replace("_", " ")}
+                          {(a.status || "SCHEDULED").replace("_", " ")}
                         </span>
                       </td>
 
@@ -657,11 +674,11 @@ export default function AppointmentsQueuePage() {
                   {patients
                     .filter(p => 
                       p.fullName.toLowerCase().includes(patientSearchTerm.toLowerCase()) || 
-                      p.guardianName.toLowerCase().includes(patientSearchTerm.toLowerCase())
+                      (p.parentGuardianName || p.guardianName || "").toLowerCase().includes(patientSearchTerm.toLowerCase())
                     )
                     .map((p) => (
                       <option key={p.id} value={p.id}>
-                        {p.fullName} ({p.id}) — Guardian: {p.guardianName}
+                        {p.fullName} ({p.id}) — Guardian: {p.parentGuardianName || p.guardianName || "N/A"}
                       </option>
                     ))}
                 </select>
@@ -842,3 +859,17 @@ export default function AppointmentsQueuePage() {
     </div>
   );
 }
+
+export default function AppointmentsQueuePage() {
+  return (
+    <Suspense fallback={
+      <div className="p-8 text-center text-slate-500 font-medium flex items-center justify-center gap-2">
+        <RefreshCw className="w-4 h-4 animate-spin text-[#1769D2]" />
+        <span>Loading clinic appointments and live queue...</span>
+      </div>
+    }>
+      <AppointmentsQueueContent />
+    </Suspense>
+  );
+}
+

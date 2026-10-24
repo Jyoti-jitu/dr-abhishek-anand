@@ -5,7 +5,7 @@ import { PaymentStatus, PaymentMethod, InvoiceItem } from "@/lib/db/types";
 
 export async function GET(req: NextRequest) {
   try {
-    const authResult = await requireUserWithRole(["ADMIN", "BILLING", "DOCTOR"]);
+    const authResult = await requireUserWithRole(["ADMIN", "BILLING", "DOCTOR", "RECEPTIONIST"]);
     if ("error" in authResult) {
       return NextResponse.json({ error: authResult.error }, { status: authResult.status });
     }
@@ -31,7 +31,7 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const authResult = await requireUserWithRole(["ADMIN", "BILLING", "RECEPTIONIST"]);
+    const authResult = await requireUserWithRole(["ADMIN", "BILLING", "RECEPTIONIST", "DOCTOR"]);
     if ("error" in authResult) {
       return NextResponse.json({ error: authResult.error }, { status: authResult.status });
     }
@@ -127,9 +127,14 @@ export async function POST(req: NextRequest) {
       newInvoice.id
     );
 
+    const enrichedInvoice = {
+      ...newInvoice,
+      patient
+    };
+
     return NextResponse.json({
       success: true,
-      invoice: newInvoice,
+      invoice: enrichedInvoice,
       message: `Invoice ${newInvoice.invoiceNumber} generated successfully.`
     });
   } catch (err: unknown) {

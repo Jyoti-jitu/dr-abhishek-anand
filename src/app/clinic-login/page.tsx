@@ -44,15 +44,11 @@ export default function ClinicLoginPage() {
         return;
       }
 
-      // Redirect based on role
-      if (data.user.role === "DOCTOR") {
+      // Redirect based on role (Two consolidated roles: Doctor & Admin vs Reception & Billing)
+      if (data.user.role === "DOCTOR" || data.user.role === "ADMIN") {
         router.push("/portal/doctor");
-      } else if (data.user.role === "BILLING") {
-        router.push("/portal/billing");
-      } else if (data.user.role === "RECEPTIONIST") {
-        router.push("/portal/appointments");
       } else {
-        router.push("/portal/doctor");
+        router.push("/portal/appointments");
       }
       router.refresh();
     } catch {
@@ -168,64 +164,48 @@ export default function ClinicLoginPage() {
             </button>
           </form>
 
-          {/* Quick Review Helper / Role Switcher for seamless evaluation */}
+          {/* Quick Review Helper / Role Switcher for 2-Role System */}
           <div className="pt-4 border-t border-border-subtle space-y-2.5">
             <div className="flex items-center justify-between">
               <span className="text-[11px] font-bold uppercase tracking-wider text-charcoal-muted">
-                Demo Accounts for Review:
+                Role-Based Demo Access (2 Roles):
               </span>
               <span className="text-[10px] text-teal-dark bg-teal-light px-2 py-0.5 rounded font-medium">
                 Tap to Autofill
               </span>
             </div>
 
-            <div className="grid grid-cols-2 gap-2 text-xs">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs">
               <button
                 type="button"
                 onClick={() => setDemoRole("dr.anand", "Doctor@2026")}
-                className="p-2.5 text-left rounded-lg border border-border-subtle bg-light-bg hover:bg-teal-light/50 hover:border-teal/50 transition-all flex flex-col"
+                className="p-3 text-left rounded-xl border border-border-subtle bg-light-bg hover:bg-teal-light/50 hover:border-teal/50 transition-all flex flex-col group cursor-pointer"
               >
-                <span className="font-bold text-navy flex items-center gap-1">
-                  <Stethoscope className="w-3.5 h-3.5 text-medical" />
-                  Dr. Abhishek Anand
-                </span>
-                <span className="text-[10px] text-charcoal-muted mt-0.5">Role: Doctor (Consultant)</span>
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-navy flex items-center gap-1.5 text-xs">
+                    <Stethoscope className="w-4 h-4 text-medical" />
+                    Doctor & Admin
+                  </span>
+                  <span className="text-[9px] bg-teal-light text-teal-dark font-bold px-1.5 py-0.5 rounded">All Access</span>
+                </div>
+                <span className="text-[11px] text-charcoal font-medium mt-1">Dr. Abhishek Anand</span>
+                <span className="text-[10px] text-charcoal-muted mt-0.5">Clinical EMR, Rx, Admin Settings & Audit Trail</span>
               </button>
 
               <button
                 type="button"
                 onClick={() => setDemoRole("reception", "Reception@2026")}
-                className="p-2.5 text-left rounded-lg border border-border-subtle bg-light-bg hover:bg-teal-light/50 hover:border-teal/50 transition-all flex flex-col"
+                className="p-3 text-left rounded-xl border border-border-subtle bg-light-bg hover:bg-teal-light/50 hover:border-teal/50 transition-all flex flex-col group cursor-pointer"
               >
-                <span className="font-bold text-navy flex items-center gap-1">
-                  <User className="w-3.5 h-3.5 text-teal" />
-                  Priyanka Nayak
-                </span>
-                <span className="text-[10px] text-charcoal-muted mt-0.5">Role: Receptionist</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setDemoRole("billing", "Billing@2026")}
-                className="p-2.5 text-left rounded-lg border border-border-subtle bg-light-bg hover:bg-teal-light/50 hover:border-teal/50 transition-all flex flex-col"
-              >
-                <span className="font-bold text-navy flex items-center gap-1">
-                  <Building2 className="w-3.5 h-3.5 text-amber-600" />
-                  Rajesh Das
-                </span>
-                <span className="text-[10px] text-charcoal-muted mt-0.5">Role: Billing Staff</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setDemoRole("admin", "Admin@2026")}
-                className="p-2.5 text-left rounded-lg border border-border-subtle bg-light-bg hover:bg-teal-light/50 hover:border-teal/50 transition-all flex flex-col"
-              >
-                <span className="font-bold text-navy flex items-center gap-1">
-                  <ShieldCheck className="w-3.5 h-3.5 text-navy" />
-                  Administrator
-                </span>
-                <span className="text-[10px] text-charcoal-muted mt-0.5">Role: Clinic Admin</span>
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-navy flex items-center gap-1.5 text-xs">
+                    <User className="w-4 h-4 text-teal" />
+                    Reception & Billing
+                  </span>
+                  <span className="text-[9px] bg-blue-50 text-blue-700 font-bold px-1.5 py-0.5 rounded">Front Desk</span>
+                </div>
+                <span className="text-[11px] text-charcoal font-medium mt-1">Priyanka Nayak</span>
+                <span className="text-[10px] text-charcoal-muted mt-0.5">Patient Reg, Appointments, Queue & Invoicing</span>
               </button>
             </div>
           </div>

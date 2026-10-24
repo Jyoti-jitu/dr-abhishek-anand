@@ -118,7 +118,7 @@ export default function RootLayout({
   };
 
   return (
-    <html lang="en" className={`${manrope.variable} ${inter.variable} h-full antialiased`}>
+    <html lang="en" data-scroll-behavior="smooth" className={`${manrope.variable} ${inter.variable} h-full antialiased`}>
       <head>
         <script
           type="application/ld+json"

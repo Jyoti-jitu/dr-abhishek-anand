@@ -649,7 +649,7 @@ export default function PatientProfilePage({ params }: Props) {
                   <tr key={apt.id}>
                     <td className="py-2.5 font-bold text-navy">{apt.appointmentDate}</td>
                     <td className="py-2.5">{apt.appointmentTime}</td>
-                    <td className="py-2.5 capitalize">{apt.consultationType.toLowerCase().replace("_", " ")}</td>
+                    <td className="py-2.5 capitalize">{(apt.consultationType || "General").toLowerCase().replace("_", " ")}</td>
                     <td className="py-2.5 text-charcoal-muted">{apt.reasonForVisit}</td>
                     <td className="py-2.5">
                       <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-700">

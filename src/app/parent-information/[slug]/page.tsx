@@ -1,4 +1,4 @@
-import React from "react";
+import React, { Suspense } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
@@ -50,7 +50,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   };
 }
 
-export default async function ArticleDetailPage({ params }: Props) {
+async function ArticleContent({ params }: Props) {
   const { slug } = await params;
   const article = PARENT_ARTICLES.find((a) => a.slug === slug);
 
@@ -241,5 +241,13 @@ export default async function ArticleDetailPage({ params }: Props) {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function ArticleDetailPage({ params }: Props) {
+  return (
+    <Suspense fallback={<div className="py-20 text-center text-xs text-charcoal-muted">Loading article...</div>}>
+      <ArticleContent params={params} />
+    </Suspense>
   );
 }

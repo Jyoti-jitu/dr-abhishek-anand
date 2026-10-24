@@ -19,7 +19,7 @@ export async function GET() {
 
 export async function PUT(req: NextRequest) {
   try {
-    const authResult = await requireUserWithRole(["ADMIN"]);
+    const authResult = await requireUserWithRole(["ADMIN", "DOCTOR", "RECEPTIONIST", "BILLING"]);
     if ("error" in authResult) {
       return NextResponse.json({ error: authResult.error }, { status: authResult.status });
     }

@@ -67,12 +67,28 @@ export async function requireUserWithRole(allowedRoles: UserRole[]): Promise<{ u
     return { error: "Unauthorized. Please log in to your clinic account.", status: 401 };
   }
 
-  if (!allowedRoles.includes(user.role) && user.role !== "ADMIN") {
-    return { 
-      error: `Access Denied. Your role (${user.role}) is not authorised for this action.`, 
-      status: 403 
-    };
+  // Two-Role Consolidated RBAC Architecture:
+  // Role 1: DOCTOR / ADMIN ("Doctor & Admin")
+  // Full clinic authority: Clinical EMR, consultations, prescriptions, live queue, billing, clinic settings, audit logs.
+  // Role 2: RECEPTIONIST / BILLING ("Reception & Billing")
+  // Front-desk and financial operations: Patient registration, appointments, queue ticketing, invoices, receipts.
+  const isDoctorAdmin = user.role === "DOCTOR" || user.role === "ADMIN";
+  const isReceptionBilling = user.role === "RECEPTIONIST" || user.role === "BILLING";
+
+  // Doctor & Admin has universal authority across all endpoints
+  if (isDoctorAdmin) {
+    return { user };
   }
 
-  return { user };
+  // Reception & Billing is authorized when the endpoint permits RECEPTIONIST or BILLING
+  const allowsReceptionBilling = allowedRoles.some(r => r === "RECEPTIONIST" || r === "BILLING");
+  if (isReceptionBilling && allowsReceptionBilling) {
+    return { user };
+  }
+
+  const roleLabel = isReceptionBilling ? "Reception & Billing" : user.role;
+  return { 
+    error: `Access Denied. Your role (${roleLabel}) is not authorised for this action.`, 
+    status: 403 
+  };
 }

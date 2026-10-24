@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, Suspense } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { 
@@ -15,11 +15,13 @@ import {
   Search, 
   AlertCircle, 
   ArrowRight, 
-  Stethoscope,
-  Building2,
-  ChevronRight,
-  Sparkles,
-  Baby
+  Stethoscope, 
+  Building2, 
+  ChevronRight, 
+  RefreshCw, 
+  Baby, 
+  AlertTriangle, 
+  Ticket 
 } from "lucide-react";
 
 interface QueueItem {
@@ -65,14 +67,32 @@ interface AppointmentItem {
   };
 }
 
-export default function DoctorDashboardPage() {
+function calculateAge(dob?: string) {
+  if (!dob) return "";
+  const birth = new Date(dob);
+  const now = new Date();
+  let years = now.getFullYear() - birth.getFullYear();
+  let months = now.getMonth() - birth.getMonth();
+  if (months < 0) {
+    years--;
+    months += 12;
+  }
+  if (years === 0) {
+    return `${Math.max(1, months)} mo`;
+  }
+  return `${years} yr${years > 1 ? "s" : ""}`;
+}
+
+function DoctorDashboardContent() {
   const router = useRouter();
   const [queue, setQueue] = useState<QueueItem[]>([]);
   const [appointments, setAppointments] = useState<AppointmentItem[]>([]);
   const [recentConsultations, setRecentConsultations] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<"QUEUE" | "SCHEDULE">("QUEUE");
   const [patientSearchQuery, setPatientSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
 
   const todayStr = new Date().toISOString().split("T")[0];
 
@@ -108,6 +128,7 @@ export default function DoctorDashboardPage() {
     if (!patientSearchQuery.trim()) return;
 
     try {
+      setIsSearching(true);
       const res = await fetch(`/api/patients?q=${encodeURIComponent(patientSearchQuery.trim())}`);
       const data = await res.json();
       if (data.patients) {
@@ -115,6 +136,8 @@ export default function DoctorDashboardPage() {
       }
     } catch (err) {
       console.error("Search error:", err);
+    } finally {
+      setIsSearching(false);
     }
   };
 
@@ -138,357 +161,394 @@ export default function DoctorDashboardPage() {
   const totalTodayApts = appointments.length;
 
   return (
-    <div className="space-y-8">
-      {/* Welcome & Clinician Banner */}
-      <div className="p-6 rounded-2xl bg-navy text-white shadow-editorial border border-navy-light flex flex-col md:flex-row md:items-center justify-between gap-6">
-        <div className="space-y-2">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-teal/20 text-teal-light text-xs font-semibold tracking-wide uppercase">
-            <Stethoscope className="w-3.5 h-3.5" />
-            <span>Paediatric Surgery & Urology OPD</span>
+    <div className="space-y-6">
+      {/* 1. Header & Actions Strip */}
+      <div className="bg-white p-5 sm:p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-2">
+            <h1 className="text-xl sm:text-2xl font-bold text-[#12304A]">
+              Dr. Abhishek Anand
+            </h1>
+            <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-50 text-[#1769D2] border border-blue-200">
+              Cabin Active
+            </span>
           </div>
-          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-white">
-            Welcome, Dr. Abhishek Anand
-          </h1>
-          <p className="text-xs sm:text-sm text-slate-300 max-w-2xl leading-relaxed">
-            New Life Clinic, Soubhagya Nagar, Bhubaneswar • Evening Session Active (5:00 PM – 9:00 PM). Manage today&apos;s waiting queue, start patient consultations, and review surgical follow-ups.
+          <p className="text-xs text-slate-500 mt-1 flex items-center gap-1.5 flex-wrap">
+            <span className="font-semibold text-slate-700">Evening OPD: 5:00 PM – 9:00 PM</span>
+            <span>•</span>
+            <span>New Life Clinic, Soubhagya Nagar, Bhubaneswar</span>
           </p>
         </div>
 
-        <div className="shrink-0 flex flex-wrap items-center gap-3">
+        <div className="flex items-center gap-2.5 shrink-0">
+          <button
+            onClick={() => fetchData()}
+            className="p-2.5 text-slate-500 hover:text-[#1769D2] hover:bg-slate-100 rounded-xl border border-slate-200 transition-colors"
+            title="Refresh clinical data"
+          >
+            <RefreshCw className={`w-4 h-4 ${isLoading ? "animate-spin text-[#1769D2]" : ""}`} />
+          </button>
           <Link
             href="/portal/consultations/new"
-            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-teal text-white hover:bg-teal-dark font-semibold text-xs shadow-xs transition-colors"
+            className="px-4 py-2.5 bg-[#1769D2] hover:bg-[#1258b5] text-white font-semibold text-xs rounded-xl shadow-sm transition-colors flex items-center gap-2"
           >
             <Plus className="w-4 h-4" />
             <span>New Consultation</span>
           </Link>
           <Link
             href="/portal/appointments"
-            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-white/10 hover:bg-white/20 text-white font-semibold text-xs border border-white/20 transition-colors"
+            className="px-3.5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs rounded-xl border border-slate-200 transition-colors hidden md:inline-flex items-center gap-1.5"
           >
-            <Calendar className="w-4 h-4 text-teal-light" />
-            <span>Today&apos;s Schedule</span>
+            <Calendar className="w-4 h-4 text-slate-500" />
+            <span>Schedule</span>
           </Link>
         </div>
       </div>
 
-      {/* KPI Stats Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
-        <div className="p-4 rounded-xl bg-white border border-border-subtle shadow-2xs space-y-1">
-          <div className="flex items-center justify-between text-xs text-charcoal-muted">
-            <span className="font-semibold uppercase tracking-wider text-[11px]">Today&apos;s Slots</span>
-            <Calendar className="w-4 h-4 text-medical" />
+      {/* 2. Clinical KPI Metrics (4 Clean Uniform Cards) */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm space-y-1">
+          <div className="flex items-center justify-between text-xs font-semibold text-slate-500 uppercase tracking-wide">
+            <span>Waiting Room</span>
+            <Clock className="w-4 h-4 text-amber-500" />
           </div>
-          <div className="text-2xl font-bold text-navy">{totalTodayApts}</div>
-          <p className="text-[11px] text-charcoal-muted">Booked consultations</p>
+          <div className="text-2xl font-black text-slate-900">{waitingPatients.length}</div>
+          <p className="text-[11px] text-amber-700 font-medium">Patients waiting for token call</p>
         </div>
 
-        <div className="p-4 rounded-xl bg-white border border-amber-300/80 shadow-2xs space-y-1">
-          <div className="flex items-center justify-between text-xs text-amber-800">
-            <span className="font-semibold uppercase tracking-wider text-[11px]">Waiting Queue</span>
-            <Clock className="w-4 h-4 text-amber-600" />
+        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm space-y-1">
+          <div className="flex items-center justify-between text-xs font-semibold text-slate-500 uppercase tracking-wide">
+            <span>Inside Cabin</span>
+            <Stethoscope className="w-4 h-4 text-[#1769D2]" />
           </div>
-          <div className="text-2xl font-bold text-amber-900">{waitingPatients.length}</div>
-          <p className="text-[11px] text-amber-700">Patients in waiting room</p>
+          <div className="text-2xl font-black text-[#1769D2]">
+            {inConsultationPatient ? inConsultationPatient.tokenCode : "Ready"}
+          </div>
+          <p className="text-[11px] text-slate-500 truncate font-medium">
+            {inConsultationPatient?.patient?.fullName || "Awaiting next patient"}
+          </p>
         </div>
 
-        <div className="p-4 rounded-xl bg-white border border-teal/40 shadow-2xs space-y-1">
-          <div className="flex items-center justify-between text-xs text-teal-dark">
-            <span className="font-semibold uppercase tracking-wider text-[11px]">In Consultation</span>
-            <Play className="w-4 h-4 text-teal" />
-          </div>
-          <div className="text-2xl font-bold text-navy">
-            {inConsultationPatient ? "1 Active" : "None"}
-          </div>
-          <p className="text-[11px] text-teal-dark">Currently in doctor room</p>
-        </div>
-
-        <div className="p-4 rounded-xl bg-white border border-border-subtle shadow-2xs space-y-1">
-          <div className="flex items-center justify-between text-xs text-charcoal-muted">
-            <span className="font-semibold uppercase tracking-wider text-[11px]">Completed</span>
+        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm space-y-1">
+          <div className="flex items-center justify-between text-xs font-semibold text-slate-500 uppercase tracking-wide">
+            <span>Completed</span>
             <CheckCircle2 className="w-4 h-4 text-emerald-600" />
           </div>
-          <div className="text-2xl font-bold text-navy">{completedTodayCount}</div>
-          <p className="text-[11px] text-charcoal-muted">Signed consultations</p>
+          <div className="text-2xl font-black text-slate-900">{completedTodayCount}</div>
+          <p className="text-[11px] text-emerald-700 font-medium">Consultations signed today</p>
         </div>
 
-        <div className="col-span-2 lg:col-span-1 p-4 rounded-xl bg-white border border-border-subtle shadow-2xs space-y-1">
-          <div className="flex items-center justify-between text-xs text-charcoal-muted">
-            <span className="font-semibold uppercase tracking-wider text-[11px]">Follow-ups Due</span>
-            <Users className="w-4 h-4 text-teal" />
+        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm space-y-1">
+          <div className="flex items-center justify-between text-xs font-semibold text-slate-500 uppercase tracking-wide">
+            <span>Today&apos;s Bookings</span>
+            <Calendar className="w-4 h-4 text-slate-500" />
           </div>
-          <div className="text-2xl font-bold text-navy">3 Due</div>
-          <p className="text-[11px] text-charcoal-muted">Surgical review this week</p>
+          <div className="text-2xl font-black text-slate-900">{totalTodayApts}</div>
+          <p className="text-[11px] text-slate-500 font-medium">Scheduled OPD consultations</p>
         </div>
       </div>
 
-      {/* Main Grid: Waiting Queue + Quick Actions */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-        {/* Left Column: Live Queue & Current Consultation */}
-        <div className="lg:col-span-7 space-y-6">
-          {/* Active Patient In Consultation Card */}
-          {inConsultationPatient && inConsultationPatient.patient && (
-            <div className="p-5 rounded-2xl bg-teal-subtle border-2 border-teal shadow-editorial space-y-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-teal text-white">
-                    {inConsultationPatient.tokenCode}
-                  </span>
-                  <span className="text-xs font-bold uppercase tracking-wider text-teal-dark">
-                    Currently Inside Consultation Room
-                  </span>
-                </div>
-                <span className="text-xs text-charcoal-muted">
-                  Checked in {inConsultationPatient.checkInTime ? new Date(inConsultationPatient.checkInTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "Earlier"}
+      {/* 3. Hero Cabin Card (When a patient is actively in consultation) */}
+      {inConsultationPatient && inConsultationPatient.patient && (
+        <div className="p-5 sm:p-6 rounded-2xl bg-gradient-to-r from-blue-50/90 via-indigo-50/50 to-white border-2 border-[#1769D2] shadow-md space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-blue-200/60 pb-3">
+            <div className="flex items-center gap-2.5">
+              <span className="w-9 h-9 rounded-xl bg-[#1769D2] text-white font-black text-sm flex items-center justify-center shadow-xs">
+                {inConsultationPatient.tokenCode}
+              </span>
+              <div>
+                <span className="text-[11px] font-bold uppercase tracking-wider text-[#1769D2] block">
+                  Active in Doctor Cabin
+                </span>
+                <span className="text-xs text-slate-500">
+                  Checked in at {inConsultationPatient.checkInTime ? new Date(inConsultationPatient.checkInTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "Earlier"}
                 </span>
               </div>
-
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <h3 className="text-xl font-bold text-navy">
-                    {inConsultationPatient.patient.fullName}
-                  </h3>
-                  <p className="text-xs text-charcoal-muted mt-0.5">
-                    Patient ID: <span className="font-semibold text-navy">{inConsultationPatient.patient.patientId}</span> • Gender: {inConsultationPatient.patient.gender} • Parent: {inConsultationPatient.patient.parentGuardianName} ({inConsultationPatient.patient.contactNumber})
-                  </p>
-                  {inConsultationPatient.appointment && (
-                    <p className="text-xs text-charcoal font-medium mt-1">
-                      Reason: {inConsultationPatient.appointment.reasonForVisit}
-                    </p>
-                  )}
-                  {inConsultationPatient.patient.allergies && inConsultationPatient.patient.allergies !== "None" && (
-                    <span className="inline-block mt-2 text-[11px] bg-red-50 text-red-700 px-2 py-0.5 rounded border border-red-200 font-medium">
-                      Allergy Alert: {inConsultationPatient.patient.allergies}
-                    </span>
-                  )}
-                </div>
-
-                <div className="shrink-0 flex flex-col gap-2">
-                  <Link
-                    href={`/portal/consultations/new?patientId=${inConsultationPatient.patient.id}&appointmentId=${inConsultationPatient.appointment?.id || ""}`}
-                    className="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg bg-navy hover:bg-navy-light text-white text-xs font-semibold shadow-xs transition-colors"
-                  >
-                    <FileText className="w-3.5 h-3.5" />
-                    <span>Open EMR Notes</span>
-                  </Link>
-                  <button
-                    onClick={() => handleUpdateQueueStatus(inConsultationPatient.id, "COMPLETED")}
-                    className="inline-flex items-center justify-center gap-1.5 px-4 py-1.5 rounded-lg border border-border-subtle bg-white text-charcoal hover:bg-slate-100 text-xs font-medium transition-colors"
-                  >
-                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                    <span>Complete Visit</span>
-                  </button>
-                </div>
-              </div>
             </div>
-          )}
 
-          {/* Waiting Room Queue */}
-          <div className="p-6 rounded-2xl bg-white border border-border-subtle shadow-editorial space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-border-subtle">
-              <div>
-                <h2 className="text-base font-bold text-navy">
-                  Live Waiting Queue — Dr. Abhishek Anand
-                </h2>
-                <p className="text-xs text-charcoal-muted">
-                  Patients waiting at New Life Clinic front desk for consultation.
-                </p>
-              </div>
-              <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-amber-50 text-amber-800 border border-amber-200">
-                {waitingPatients.length} Waiting
+            <div className="flex items-center gap-2">
+              <Link
+                href={`/portal/consultations/new?patientId=${inConsultationPatient.patient.id}&appointmentId=${inConsultationPatient.appointment?.id || ""}`}
+                className="px-4 py-2 bg-[#1769D2] hover:bg-[#1258b5] text-white text-xs font-bold rounded-xl shadow-xs transition-colors flex items-center gap-2"
+              >
+                <FileText className="w-4 h-4" />
+                <span>Open EMR & Prescribe</span>
+              </Link>
+              <button
+                onClick={() => handleUpdateQueueStatus(inConsultationPatient.id, "COMPLETED")}
+                className="px-3.5 py-2 bg-white hover:bg-slate-100 text-slate-700 text-xs font-semibold rounded-xl border border-slate-200 transition-colors flex items-center gap-1.5"
+              >
+                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                <span>Mark Finished</span>
+              </button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+            <div>
+              <span className="text-slate-400 font-medium block">Patient Name & Age:</span>
+              <span className="text-base font-bold text-slate-900 block">
+                {inConsultationPatient.patient.fullName}
+              </span>
+              <span className="text-slate-500">
+                {calculateAge(inConsultationPatient.patient.dateOfBirth)} • {inConsultationPatient.patient.gender} • ID: {inConsultationPatient.patient.patientId}
               </span>
             </div>
 
-            {isLoading ? (
-              <div className="p-8 text-center text-xs text-charcoal-muted">
-                Loading queue records from database...
-              </div>
-            ) : waitingPatients.length === 0 ? (
-              <div className="p-8 text-center rounded-xl bg-light-bg text-xs text-charcoal-muted space-y-2">
-                <CheckCircle2 className="w-8 h-8 text-emerald-600 mx-auto" />
-                <p className="font-semibold text-navy">Waiting Room is Currently Clear</p>
-                <p>No patients are currently marked as waiting in the OPD queue.</p>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {waitingPatients.map((item) => (
-                  <div
-                    key={item.id}
-                    className="p-4 rounded-xl border border-border-subtle hover:border-teal/50 bg-warm-white transition-all flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3"
-                  >
-                    <div className="flex items-start gap-3">
-                      <div className="w-10 h-10 rounded-xl bg-amber-100 text-amber-800 font-bold text-sm flex items-center justify-center shrink-0 border border-amber-200">
-                        {item.tokenCode}
-                      </div>
-                      <div className="space-y-0.5">
-                        <div className="flex items-center gap-2">
-                          <h4 className="text-sm font-bold text-navy">
-                            {item.patient?.fullName || "Patient"}
-                          </h4>
-                          <span className="text-[10px] text-charcoal-muted font-mono">
-                            {item.patient?.patientId}
-                          </span>
-                          {item.priorityLevel === "INFANT_PRIORITY" && (
-                            <span className="text-[10px] font-semibold bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded border border-blue-200 flex items-center gap-1">
-                              <Baby className="w-3 h-3" />
-                              Infant Priority
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-xs text-charcoal-muted">
-                          Parent: {item.patient?.parentGuardianName} • Contact: {item.patient?.contactNumber}
-                        </p>
-                        {item.appointment && (
-                          <p className="text-xs text-charcoal">
-                            Reason: {item.appointment.reasonForVisit}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
-                      <button
-                        onClick={() => handleUpdateQueueStatus(item.id, "IN_CONSULTATION")}
-                        className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-medical hover:bg-medical-hover text-white text-xs font-semibold shadow-xs transition-colors cursor-pointer"
-                      >
-                        <Play className="w-3 h-3" />
-                        <span>Call In Patient</span>
-                      </button>
-                      <Link
-                        href={`/portal/patients/${item.patient?.id}`}
-                        className="px-3 py-1.5 rounded-lg border border-border-subtle bg-white hover:bg-slate-50 text-xs font-medium text-charcoal transition-colors"
-                      >
-                        View History
-                      </Link>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Today's Full Schedule Table */}
-          <div className="p-6 rounded-2xl bg-white border border-border-subtle shadow-editorial space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-border-subtle">
-              <div>
-                <h3 className="text-base font-bold text-navy">
-                  Today&apos;s Booked Consultation Slots
-                </h3>
-                <p className="text-xs text-charcoal-muted">
-                  All scheduled appointments for {todayStr}.
-                </p>
-              </div>
-              <Link
-                href="/portal/appointments"
-                className="text-xs text-medical font-semibold hover:underline"
-              >
-                Manage Schedule →
-              </Link>
+            <div>
+              <span className="text-slate-400 font-medium block">Parent / Guardian:</span>
+              <span className="font-semibold text-slate-800 block">
+                {inConsultationPatient.patient.parentGuardianName}
+              </span>
+              <span className="text-slate-500 font-mono">
+                {inConsultationPatient.patient.contactNumber}
+              </span>
             </div>
 
+            <div>
+              <span className="text-slate-400 font-medium block">Chief Reason / Visit:</span>
+              <span className="font-semibold text-slate-800 block">
+                {inConsultationPatient.appointment?.reasonForVisit || "Paediatric surgical review"}
+              </span>
+              <span className="text-slate-500">
+                Type: {(inConsultationPatient.appointment?.consultationType || "GENERAL").replace("_", " ")}
+              </span>
+            </div>
+          </div>
+
+          {inConsultationPatient.patient.allergies && inConsultationPatient.patient.allergies !== "None" && inConsultationPatient.patient.allergies !== "No known drug allergies (NKDA)" && (
+            <div className="p-2.5 rounded-xl bg-red-50 border border-red-200 text-red-800 text-xs flex items-center gap-2 font-medium">
+              <AlertTriangle className="w-4 h-4 text-red-600 shrink-0" />
+              <span>Medical Alert: {inConsultationPatient.patient.allergies}</span>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* 4. Two-Column Workspace */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+        {/* Left Column: Live Queue & Today's Schedule Tabs */}
+        <div className="lg:col-span-8 bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+          {/* Card Header with View Switcher */}
+          <div className="p-4 sm:p-5 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="inline-flex p-1 bg-slate-100 rounded-xl border border-slate-200 text-xs font-semibold">
+              <button
+                onClick={() => setActiveTab("QUEUE")}
+                className={`px-3.5 py-1.5 rounded-lg flex items-center gap-2 transition-all ${
+                  activeTab === "QUEUE"
+                    ? "bg-white text-[#12304A] shadow-xs font-bold"
+                    : "text-slate-600 hover:text-slate-900"
+                }`}
+              >
+                <Ticket className="w-3.5 h-3.5 text-[#1769D2]" />
+                <span>Live Waiting Queue ({waitingPatients.length})</span>
+              </button>
+              <button
+                onClick={() => setActiveTab("SCHEDULE")}
+                className={`px-3.5 py-1.5 rounded-lg flex items-center gap-2 transition-all ${
+                  activeTab === "SCHEDULE"
+                    ? "bg-white text-[#12304A] shadow-xs font-bold"
+                    : "text-slate-600 hover:text-slate-900"
+                }`}
+              >
+                <Calendar className="w-3.5 h-3.5 text-[#1769D2]" />
+                <span>Today&apos;s Schedule ({appointments.length})</span>
+              </button>
+            </div>
+
+            <span className="text-xs text-slate-400 font-medium">
+              Date: <span className="font-semibold text-slate-700">{todayStr}</span>
+            </span>
+          </div>
+
+          {/* TAB 1: LIVE WAITING QUEUE */}
+          {activeTab === "QUEUE" && (
+            <div>
+              {isLoading ? (
+                <div className="p-12 text-center text-xs text-slate-400">
+                  <RefreshCw className="w-6 h-6 animate-spin text-[#1769D2] mx-auto mb-2" />
+                  <span>Loading waiting queue...</span>
+                </div>
+              ) : waitingPatients.length === 0 ? (
+                <div className="p-12 text-center space-y-2">
+                  <CheckCircle2 className="w-10 h-10 text-emerald-600 mx-auto" />
+                  <h3 className="text-sm font-bold text-slate-800">Waiting Room is Currently Clear</h3>
+                  <p className="text-xs text-slate-500 max-w-sm mx-auto">
+                    No children are currently waiting in the OPD queue. New arrivals will appear automatically when checked in by reception.
+                  </p>
+                </div>
+              ) : (
+                <div className="divide-y divide-slate-100">
+                  {waitingPatients.map((item) => (
+                    <div
+                      key={item.id}
+                      className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-slate-50/60 transition-colors"
+                    >
+                      <div className="flex items-start gap-3.5">
+                        <div className="w-12 h-12 rounded-xl bg-amber-100 text-amber-900 border border-amber-300 flex flex-col items-center justify-center shrink-0">
+                          <span className="text-[9px] font-bold uppercase leading-none">Token</span>
+                          <span className="text-base font-black leading-tight">{item.tokenCode}</span>
+                        </div>
+
+                        <div className="space-y-0.5 text-xs">
+                          <div className="flex items-center gap-2">
+                            <h4 className="font-bold text-slate-900 text-sm">
+                              {item.patient?.fullName || "Patient"}
+                            </h4>
+                            <span className="text-slate-400 font-mono text-[11px]">
+                              {calculateAge(item.patient?.dateOfBirth)} • {item.patient?.gender}
+                            </span>
+                            {item.priorityLevel === "INFANT_PRIORITY" && (
+                              <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200 flex items-center gap-1">
+                                <Baby className="w-3 h-3" /> Infant
+                              </span>
+                            )}
+                          </div>
+
+                          <p className="text-slate-500">
+                            Parent: <span className="font-medium text-slate-700">{item.patient?.parentGuardianName}</span> • Contact: <span className="font-mono text-slate-700">{item.patient?.contactNumber}</span>
+                          </p>
+                          <p className="text-slate-700 font-medium">
+                            Reason: {item.appointment?.reasonForVisit || "OPD consultation"}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+                        <button
+                          onClick={() => handleUpdateQueueStatus(item.id, "IN_CONSULTATION")}
+                          className="px-4 py-2 bg-[#1769D2] hover:bg-[#1258b5] text-white text-xs font-bold rounded-xl shadow-xs transition-colors flex items-center gap-1.5"
+                        >
+                          <Play className="w-3.5 h-3.5 fill-current" />
+                          <span>Call In</span>
+                        </button>
+                        <Link
+                          href={`/portal/patients/${item.patient?.id}`}
+                          className="px-3 py-2 border border-slate-200 hover:bg-slate-100 text-slate-600 text-xs font-semibold rounded-xl transition-colors"
+                        >
+                          History
+                        </Link>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* TAB 2: TODAY'S SCHEDULE */}
+          {activeTab === "SCHEDULE" && (
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs">
                 <thead>
-                  <tr className="border-b border-border-subtle text-charcoal-muted uppercase tracking-wider text-[11px]">
-                    <th className="py-2.5">Time</th>
-                    <th className="py-2.5">Patient Details</th>
-                    <th className="py-2.5">Visit Type</th>
-                    <th className="py-2.5">Reason</th>
-                    <th className="py-2.5">Status</th>
+                  <tr className="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold uppercase tracking-wider text-[11px]">
+                    <th className="py-3 px-4">Slot Time</th>
+                    <th className="py-3 px-4">Patient & Guardian</th>
+                    <th className="py-3 px-4">Type</th>
+                    <th className="py-3 px-4">Reason</th>
+                    <th className="py-3 px-4 text-center">Status</th>
+                    <th className="py-3 px-4 text-right">Actions</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-border-subtle/60">
-                  {appointments.map((apt) => (
-                    <tr key={apt.id} className="hover:bg-light-bg/50">
-                      <td className="py-3 font-bold text-navy whitespace-nowrap">
-                        {apt.appointmentTime}
-                      </td>
-                      <td className="py-3">
-                        <Link 
-                          href={`/portal/patients/${apt.patient?.id}`}
-                          className="font-bold text-medical hover:underline block"
-                        >
-                          {apt.patient?.fullName}
-                        </Link>
-                        <span className="text-[11px] text-charcoal-muted">
-                          {apt.patient?.patientId} • Parent: {apt.patient?.parentGuardianName}
-                        </span>
-                      </td>
-                      <td className="py-3">
-                        <span className="capitalize text-slate-700">
-                          {apt.consultationType.toLowerCase().replace("_", " ")}
-                        </span>
-                      </td>
-                      <td className="py-3 max-w-xs text-charcoal-muted truncate">
-                        {apt.reasonForVisit}
-                      </td>
-                      <td className="py-3">
-                        <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-semibold ${
-                          apt.status === "COMPLETED" ? "bg-emerald-50 text-emerald-700 border border-emerald-200" :
-                          apt.status === "IN_CONSULTATION" ? "bg-teal-light text-teal-dark border border-teal/20" :
-                          apt.status === "WAITING" ? "bg-amber-50 text-amber-700 border border-amber-200" :
-                          "bg-slate-100 text-slate-700"
-                        }`}>
-                          {apt.status}
-                        </span>
+                <tbody className="divide-y divide-slate-100">
+                  {appointments.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="py-12 text-center text-slate-400">
+                        No appointments booked for today.
                       </td>
                     </tr>
-                  ))}
+                  ) : (
+                    appointments.map((apt) => (
+                      <tr key={apt.id} className="hover:bg-slate-50/50">
+                        <td className="py-3 px-4 font-mono font-bold text-slate-900 whitespace-nowrap">
+                          {apt.appointmentTime}
+                        </td>
+                        <td className="py-3 px-4">
+                          <Link
+                            href={`/portal/patients/${apt.patient?.id}`}
+                            className="font-bold text-[#1769D2] hover:underline block"
+                          >
+                            {apt.patient?.fullName}
+                          </Link>
+                          <span className="text-[11px] text-slate-500">
+                            {calculateAge(apt.patient?.dateOfBirth)} • Parent: {apt.patient?.parentGuardianName}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 text-slate-700 capitalize">
+                          {(apt.consultationType || "GENERAL").toLowerCase().replace("_", " ")}
+                        </td>
+                        <td className="py-3 px-4 text-slate-600 max-w-xs truncate">
+                          {apt.reasonForVisit}
+                        </td>
+                        <td className="py-3 px-4 text-center">
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
+                            apt.status === "COMPLETED" ? "bg-emerald-50 text-emerald-700 border border-emerald-200" :
+                            apt.status === "IN_CONSULTATION" ? "bg-blue-50 text-[#1769D2] border border-blue-200" :
+                            apt.status === "WAITING" ? "bg-amber-50 text-amber-700 border border-amber-200" :
+                            "bg-slate-100 text-slate-600"
+                          }`}>
+                            {apt.status}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 text-right">
+                          <Link
+                            href={`/portal/patients/${apt.patient?.id}`}
+                            className="text-[#1769D2] font-semibold hover:underline"
+                          >
+                            Profile →
+                          </Link>
+                        </td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
-          </div>
+          )}
         </div>
 
-        {/* Right Column: Search Patient, Quick Actions, Recent Clinical Records */}
-        <div className="lg:col-span-5 space-y-6">
-          {/* Quick Patient Search Widget */}
-          <div className="p-6 rounded-2xl bg-white border border-border-subtle shadow-editorial space-y-4">
-            <div>
-              <h3 className="text-sm font-bold uppercase tracking-wider text-navy">
-                Search Patient Records
-              </h3>
-              <p className="text-xs text-charcoal-muted mt-0.5">
-                Quickly locate a child&apos;s previous surgical notes or prescription.
-              </p>
-            </div>
+        {/* Right Column: Search, Quick Actions & Recent EMR */}
+        <div className="lg:col-span-4 space-y-6">
+          {/* 1. Quick Patient Search */}
+          <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-3">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+              <Search className="w-3.5 h-3.5 text-[#1769D2]" />
+              <span>Search Patient File</span>
+            </h3>
 
             <form onSubmit={handleSearchPatient} className="flex gap-2">
-              <div className="relative flex-1">
-                <input
-                  type="text"
-                  value={patientSearchQuery}
-                  onChange={(e) => setPatientSearchQuery(e.target.value)}
-                  placeholder="Patient Name, ID or Phone..."
-                  className="w-full pl-9 pr-3.5 py-2 rounded-lg border border-border-subtle bg-light-bg text-xs focus:bg-white focus:border-medical transition-all placeholder:text-slate-400"
-                />
-                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
-              </div>
+              <input
+                type="text"
+                value={patientSearchQuery}
+                onChange={(e) => setPatientSearchQuery(e.target.value)}
+                placeholder="Child's name, ID, or phone..."
+                className="flex-1 px-3 py-2 rounded-xl border border-slate-200 text-xs focus:ring-2 focus:ring-[#1769D2] outline-none"
+              />
               <button
                 type="submit"
-                className="px-4 py-2 rounded-lg bg-navy hover:bg-navy-light text-white text-xs font-semibold transition-colors"
+                disabled={isSearching}
+                className="px-3.5 py-2 bg-[#12304A] hover:bg-[#1b4367] text-white text-xs font-bold rounded-xl transition-colors shrink-0"
               >
-                Search
+                {isSearching ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : "Search"}
               </button>
             </form>
 
             {searchResults.length > 0 && (
-              <div className="space-y-2 pt-2 border-t border-border-subtle max-h-56 overflow-y-auto">
-                <span className="text-[11px] font-semibold text-charcoal-muted block">
-                  Found {searchResults.length} Match(es):
+              <div className="pt-2 border-t border-slate-100 space-y-1.5 max-h-52 overflow-y-auto text-xs">
+                <span className="text-[11px] font-semibold text-slate-400">
+                  {searchResults.length} Match(es):
                 </span>
                 {searchResults.map((p) => (
                   <Link
                     key={p.id}
                     href={`/portal/patients/${p.id}`}
-                    className="p-2.5 rounded-lg border border-border-subtle hover:border-medical bg-light-bg/40 hover:bg-light-bg flex items-center justify-between transition-colors block text-xs"
+                    className="p-2.5 rounded-xl border border-slate-200 hover:border-[#1769D2] hover:bg-blue-50/40 flex items-center justify-between transition-colors block"
                   >
                     <div>
-                      <span className="font-bold text-navy">{p.fullName}</span>
-                      <span className="text-[11px] text-charcoal-muted ml-2">({p.patientId})</span>
-                      <p className="text-[11px] text-charcoal-muted mt-0.5">
-                        Parent: {p.parentGuardianName} • {p.contactNumber}
-                      </p>
+                      <span className="font-bold text-slate-900 block">{p.fullName}</span>
+                      <span className="text-[11px] text-slate-500">
+                        {p.patientId} • Parent: {p.parentGuardianName || p.guardianName}
+                      </span>
                     </div>
                     <ChevronRight className="w-4 h-4 text-slate-400" />
                   </Link>
@@ -497,101 +557,93 @@ export default function DoctorDashboardPage() {
             )}
           </div>
 
-          {/* Quick Actions Shortcuts */}
-          <div className="p-6 rounded-2xl bg-white border border-border-subtle shadow-editorial space-y-3">
-            <h3 className="text-sm font-bold uppercase tracking-wider text-navy">
-              Clinical Quick Actions
+          {/* 2. Quick Clinical Shortcuts */}
+          <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-3">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-700">
+              Clinical Shortcuts
             </h3>
             <div className="grid grid-cols-2 gap-2 text-xs">
               <Link
                 href="/portal/consultations/new"
-                className="p-3 rounded-xl border border-border-subtle hover:border-teal bg-light-bg hover:bg-teal-subtle transition-all flex flex-col space-y-1"
+                className="p-3 rounded-xl border border-slate-200 hover:border-[#1769D2] hover:bg-blue-50/30 transition-all flex flex-col space-y-1"
               >
-                <FileText className="w-4 h-4 text-teal" />
-                <span className="font-bold text-navy">New Clinical Note</span>
-                <span className="text-[10px] text-charcoal-muted">Start fresh EMR record</span>
+                <FileText className="w-4 h-4 text-[#1769D2]" />
+                <span className="font-bold text-slate-900">New Clinical Note</span>
+                <span className="text-[10px] text-slate-400">Digital EMR visit</span>
               </Link>
 
               <Link
                 href="/portal/patients"
-                className="p-3 rounded-xl border border-border-subtle hover:border-medical bg-light-bg hover:bg-medical-light transition-all flex flex-col space-y-1"
+                className="p-3 rounded-xl border border-slate-200 hover:border-emerald-500 hover:bg-emerald-50/30 transition-all flex flex-col space-y-1"
               >
-                <Users className="w-4 h-4 text-medical" />
-                <span className="font-bold text-navy">Register Patient</span>
-                <span className="text-[10px] text-charcoal-muted">Add new child file</span>
+                <Users className="w-4 h-4 text-emerald-600" />
+                <span className="font-bold text-slate-900">Patient Directory</span>
+                <span className="text-[10px] text-slate-400">Registered children</span>
               </Link>
 
               <Link
                 href="/portal/prescriptions"
-                className="p-3 rounded-xl border border-border-subtle hover:border-teal bg-light-bg hover:bg-teal-subtle transition-all flex flex-col space-y-1"
+                className="p-3 rounded-xl border border-slate-200 hover:border-purple-500 hover:bg-purple-50/30 transition-all flex flex-col space-y-1"
               >
-                <Pill className="w-4 h-4 text-teal" />
-                <span className="font-bold text-navy">Write Prescription</span>
-                <span className="text-[10px] text-charcoal-muted">Digital Rx orders</span>
+                <Pill className="w-4 h-4 text-purple-600" />
+                <span className="font-bold text-slate-900">Prescriptions</span>
+                <span className="text-[10px] text-slate-400">Signed Rx orders</span>
               </Link>
 
               <Link
                 href="/portal/appointments"
-                className="p-3 rounded-xl border border-border-subtle hover:border-medical bg-light-bg hover:bg-medical-light transition-all flex flex-col space-y-1"
+                className="p-3 rounded-xl border border-slate-200 hover:border-amber-500 hover:bg-amber-50/30 transition-all flex flex-col space-y-1"
               >
-                <Clock className="w-4 h-4 text-medical" />
-                <span className="font-bold text-navy">Token Queue</span>
-                <span className="text-[10px] text-charcoal-muted">Live waiting room</span>
+                <Clock className="w-4 h-4 text-amber-600" />
+                <span className="font-bold text-slate-900">Appointments</span>
+                <span className="text-[10px] text-slate-400">Manage queue slots</span>
               </Link>
             </div>
           </div>
 
-          {/* Recent Signed EMR Consultations */}
-          <div className="p-6 rounded-2xl bg-white border border-border-subtle shadow-editorial space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-border-subtle">
-              <div>
-                <h3 className="text-sm font-bold uppercase tracking-wider text-navy">
-                  Recent Signed Consultations
-                </h3>
-                <p className="text-xs text-charcoal-muted">
-                  Audited surgical and outpatient entries.
-                </p>
-              </div>
+          {/* 3. Recent Signed Consultations */}
+          <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-3">
+            <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-700">
+                Recent Consultations
+              </h3>
               <Link
                 href="/portal/consultations"
-                className="text-xs text-teal font-semibold hover:underline"
+                className="text-[11px] text-[#1769D2] font-semibold hover:underline"
               >
                 All Records →
               </Link>
             </div>
 
             {recentConsultations.length === 0 ? (
-              <p className="text-xs text-charcoal-muted text-center py-4">
+              <p className="text-xs text-slate-400 text-center py-4">
                 No recent consultations recorded.
               </p>
             ) : (
-              <div className="space-y-3">
+              <div className="space-y-2.5">
                 {recentConsultations.map((c) => (
                   <div
                     key={c.id}
-                    className="p-3 rounded-xl border border-border-subtle hover:border-teal/40 bg-light-bg/40 text-xs space-y-1.5"
+                    className="p-3 rounded-xl border border-slate-100 bg-slate-50/50 hover:bg-slate-50 text-xs space-y-1 transition-colors"
                   >
                     <div className="flex items-center justify-between">
-                      <span className="font-bold text-navy">
-                        {c.patient?.fullName || "Patient"}
+                      <span className="font-bold text-slate-900">
+                        {c.patient?.fullName || "Child Patient"}
                       </span>
-                      <span className="text-[10px] text-charcoal-muted">
+                      <span className="text-[10px] text-slate-400 font-mono">
                         {c.consultationDate}
                       </span>
                     </div>
-                    <p className="text-xs font-semibold text-teal-dark">
-                      Diagnosis: {c.primaryDiagnosis}
+                    <p className="text-xs font-semibold text-[#1769D2] truncate">
+                      {c.primaryDiagnosis || "General Review"}
                     </p>
-                    <p className="text-[11px] text-charcoal-muted line-clamp-2">
-                      Plan: {c.treatmentPlan}
-                    </p>
-                    <div className="pt-1 flex items-center justify-between text-[11px]">
-                      <span className="text-slate-500 font-mono">{c.consultationNumber}</span>
+                    <div className="flex items-center justify-between pt-1 text-[11px]">
+                      <span className="text-slate-400 font-mono">{c.consultationNumber}</span>
                       <Link
                         href={`/portal/patients/${c.patientId}`}
-                        className="text-medical font-medium hover:underline inline-flex items-center gap-1"
+                        className="text-slate-600 font-semibold hover:text-[#1769D2] inline-flex items-center gap-0.5"
                       >
-                        <span>Open History</span>
+                        <span>History</span>
                         <ChevronRight className="w-3 h-3" />
                       </Link>
                     </div>
@@ -603,5 +655,18 @@ export default function DoctorDashboardPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function DoctorDashboardPage() {
+  return (
+    <Suspense fallback={
+      <div className="p-8 text-center text-slate-500 font-medium flex items-center justify-center gap-2">
+        <RefreshCw className="w-4 h-4 animate-spin text-[#1769D2]" />
+        <span>Loading clinical dashboard...</span>
+      </div>
+    }>
+      <DoctorDashboardContent />
+    </Suspense>
   );
 }

@@ -9,8 +9,6 @@ export default async function PortalIndexPage() {
 
   if (user.role === "DOCTOR" || user.role === "ADMIN") {
     redirect("/portal/doctor");
-  } else if (user.role === "BILLING") {
-    redirect("/portal/billing");
   } else {
     redirect("/portal/appointments");
   }

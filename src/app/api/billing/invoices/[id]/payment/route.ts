@@ -9,7 +9,7 @@ interface RouteParams {
 
 export async function POST(req: NextRequest, { params }: RouteParams) {
   try {
-    const authResult = await requireUserWithRole(["ADMIN", "BILLING", "RECEPTIONIST"]);
+    const authResult = await requireUserWithRole(["ADMIN", "BILLING", "RECEPTIONIST", "DOCTOR"]);
     if ("error" in authResult) {
       return NextResponse.json({ error: authResult.error }, { status: authResult.status });
     }

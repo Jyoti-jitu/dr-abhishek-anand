@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Menu, X, Phone, ShieldCheck, ChevronRight, Lock } from "lucide-react";
@@ -13,37 +13,66 @@ export default function Header() {
   const [isChecklistOpen, setIsChecklistOpen] = useState(false);
   const [isPhase2Open, setIsPhase2Open] = useState(false);
 
+  // Close mobile menu whenever pathname changes
+  useEffect(() => {
+    setMobileMenuOpen(false);
+  }, [pathname]);
+
+  // Lock body scroll when mobile menu is open
+  useEffect(() => {
+    if (mobileMenuOpen) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "";
+    }
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [mobileMenuOpen]);
+
+  // Close on Escape key press
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setMobileMenuOpen(false);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
   const navLinks = [
     { label: "Home", href: "/" },
     { label: "About", href: "/about" },
     { label: "Surgical Services", href: "/services" },
     { label: "Parent Information", href: "/parent-information" },
     { label: "New Life Clinic", href: "/clinic" },
+    { label: "Appointments", href: "/appointments" },
     { label: "Contact", href: "/contact" }
   ];
 
   const isActive = (href: string) => {
     if (href === "/") return pathname === "/";
-    return pathname.startsWith(href);
+    return pathname === href || pathname.startsWith(`${href}/`);
   };
 
   return (
     <>
       {/* Discreet Doctor & Concept Review Top Ribbon */}
-      <aside aria-label="Review banner" className="bg-navy-dark text-slate-300 text-xs border-b border-navy-light/60">
+      <aside aria-label="Review banner" className="bg-navy-dark text-slate-300 text-xs border-b border-navy-light/60 relative z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-1.5 flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <span className="inline-block w-2 h-2 rounded-full bg-teal animate-pulse" />
-            <span className="font-medium text-white tracking-wide">
+            <span className="font-semibold text-white tracking-wide">
               JOVIX Review Concept
             </span>
             <span className="text-slate-400 hidden sm:inline">•</span>
-            <span className="text-slate-400 hidden sm:inline">
+            <span className="text-slate-300 hidden sm:inline text-[11px]">
               Prepared for Dr. Abhishek Anand, Paediatric Surgeon
             </span>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 text-[11px] sm:text-xs">
             <button
               onClick={() => setIsChecklistOpen(true)}
               className="inline-flex items-center gap-1 text-teal-light hover:text-white font-medium transition-colors cursor-pointer"
@@ -65,35 +94,35 @@ export default function Header() {
 
       {/* Main Header */}
       <header className="sticky top-0 z-40 bg-warm-white/95 backdrop-blur-md border-b border-border-subtle shadow-xs">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between gap-3">
           {/* Identity */}
           <Link 
             href="/" 
-            className="flex flex-col group focus-visible:outline-hidden"
+            className="flex flex-col shrink-0 group focus-visible:outline-hidden"
             aria-label="Dr. Abhishek Anand Home"
           >
-            <span className="text-xl sm:text-2xl font-bold tracking-tight text-navy group-hover:text-medical transition-colors">
+            <span className="text-lg sm:text-xl xl:text-2xl font-bold tracking-tight text-navy group-hover:text-medical transition-colors">
               Dr. Abhishek Anand
             </span>
-            <span className="text-xs sm:text-sm font-medium text-charcoal-muted tracking-wide flex items-center gap-1.5">
-              <span>Paediatric Surgeon</span>
-              <span className="text-border-subtle">•</span>
-              <span className="text-teal font-medium">New Life Clinic, Bhubaneswar</span>
+            <span className="text-xs sm:text-xs xl:text-sm font-medium text-charcoal-muted tracking-wide flex items-center gap-1.5">
+              <span className="text-teal font-semibold">Paediatric Surgeon</span>
+              <span className="text-border-subtle hidden sm:inline">•</span>
+              <span className="text-charcoal-muted hidden sm:inline">New Life Clinic, Bhubaneswar</span>
             </span>
           </Link>
 
           {/* Desktop Navigation */}
-          <nav className="hidden lg:flex items-center gap-1 xl:gap-2" aria-label="Main navigation">
+          <nav className="hidden lg:flex items-center gap-1 xl:gap-1.5" aria-label="Main navigation">
             {navLinks.map((link) => {
               const active = isActive(link.href);
               return (
                 <Link
                   key={link.href}
                   href={link.href}
-                  className={`px-3 py-2 rounded-md text-sm font-medium transition-all ${
+                  className={`px-2.5 xl:px-3.5 py-2 rounded-lg text-xs xl:text-sm font-semibold transition-all duration-150 ${
                     active
-                      ? "text-navy bg-light-bg font-semibold"
-                      : "text-charcoal hover:text-navy hover:bg-slate-50"
+                      ? "text-medical bg-medical-light font-bold shadow-xs border border-medical/15"
+                      : "text-charcoal hover:text-navy hover:bg-slate-100/70"
                   }`}
                 >
                   {link.label}
@@ -102,55 +131,72 @@ export default function Header() {
             })}
           </nav>
 
-          {/* Header Action Button */}
-          <div className="hidden sm:flex items-center gap-3">
+          {/* Desktop Header Action Buttons */}
+          <div className="hidden lg:flex items-center gap-2 xl:gap-3 shrink-0">
             <Link
               href="/clinic-login"
               className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold text-navy bg-light-bg hover:bg-slate-200 border border-border-subtle transition-all"
               title="Access Clinic Management System"
             >
               <Lock className="w-3.5 h-3.5 text-medical" />
-              <span>Staff Portal</span>
+              <span className="hidden xl:inline">Staff Portal</span>
+              <span className="xl:hidden">Staff</span>
             </Link>
             <Link
               href="/contact"
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold text-white bg-medical hover:bg-medical-hover shadow-xs hover:shadow-editorial transition-all"
+              className="inline-flex items-center gap-2 px-3.5 xl:px-4 py-2 rounded-lg text-xs xl:text-sm font-semibold text-white bg-medical hover:bg-medical-hover shadow-xs hover:shadow-editorial transition-all"
             >
-              <Phone className="w-4 h-4" />
-              <span>Contact the Clinic</span>
+              <Phone className="w-3.5 h-3.5 xl:w-4 xl:h-4 shrink-0" />
+              <span>Contact Clinic</span>
             </Link>
           </div>
 
-          {/* Mobile Menu Button */}
+          {/* Mobile / Tablet Actions */}
           <div className="flex items-center gap-2 lg:hidden">
+            <a
+              href="tel:+919124616273"
+              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold text-medical bg-medical-light border border-medical/20 hover:bg-medical/10 transition-colors"
+              title="Call Clinic Helpline"
+            >
+              <Phone className="w-3.5 h-3.5 text-medical" />
+              <span className="hidden xs:inline font-bold">Call</span>
+            </a>
             <Link
               href="/clinic-login"
-              className="sm:hidden inline-flex items-center justify-center p-2 rounded-md text-navy bg-light-bg border border-border-subtle text-xs font-bold"
-              aria-label="Staff Portal"
+              className="hidden sm:inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold text-navy bg-light-bg border border-border-subtle hover:bg-slate-200 transition-colors"
+              title="Clinic Staff Login"
             >
-              <Lock className="w-4 h-4 text-medical" />
-            </Link>
-            <Link
-              href="/contact"
-              className="sm:hidden inline-flex items-center justify-center p-2 rounded-md text-medical bg-medical-light"
-              aria-label="Call clinic"
-            >
-              <Phone className="w-4 h-4" />
+              <Lock className="w-3.5 h-3.5 text-medical" />
+              <span>Portal</span>
             </Link>
             <button
+              type="button"
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="p-2 rounded-md text-charcoal hover:text-navy hover:bg-light-bg transition-colors"
+              className="p-2 rounded-lg text-charcoal hover:text-navy hover:bg-light-bg border border-transparent hover:border-border-subtle transition-colors focus:outline-hidden"
               aria-expanded={mobileMenuOpen}
-              aria-label="Toggle navigation menu"
+              aria-controls="mobile-navigation"
+              aria-label={mobileMenuOpen ? "Close navigation menu" : "Open navigation menu"}
             >
-              {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+              {mobileMenuOpen ? <X className="w-6 h-6 text-navy" /> : <Menu className="w-6 h-6 text-navy" />}
             </button>
           </div>
         </div>
 
-        {/* Mobile Slide-down Menu */}
+        {/* Mobile Backdrop Overlay */}
         {mobileMenuOpen && (
-          <div className="lg:hidden border-t border-border-subtle bg-warm-white px-4 pt-3 pb-6 space-y-2 shadow-lg animate-in slide-in-from-top-2">
+          <div
+            className="fixed inset-0 top-[113px] sm:top-[113px] bg-navy-dark/40 backdrop-blur-xs z-30 lg:hidden transition-opacity"
+            onClick={() => setMobileMenuOpen(false)}
+            aria-hidden="true"
+          />
+        )}
+
+        {/* Mobile Slide-down Drawer */}
+        {mobileMenuOpen && (
+          <div 
+            id="mobile-navigation"
+            className="lg:hidden absolute top-full left-0 w-full border-t border-border-subtle bg-warm-white px-4 pt-3 pb-6 space-y-3 shadow-xl max-h-[calc(100dvh-5rem)] overflow-y-auto z-40 transition-all"
+          >
             <nav className="space-y-1" aria-label="Mobile navigation">
               {navLinks.map((link) => {
                 const active = isActive(link.href);
@@ -159,20 +205,28 @@ export default function Header() {
                     key={link.href}
                     href={link.href}
                     onClick={() => setMobileMenuOpen(false)}
-                    className={`flex items-center justify-between px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                    className={`flex items-center justify-between px-3.5 py-2.5 rounded-lg text-sm font-medium transition-colors ${
                       active
-                        ? "text-navy bg-light-bg font-semibold border-l-4 border-medical"
-                        : "text-charcoal hover:bg-slate-50"
+                        ? "text-medical bg-medical-light font-bold border-l-4 border-medical"
+                        : "text-charcoal hover:bg-slate-50 hover:text-navy"
                     }`}
                   >
                     <span>{link.label}</span>
-                    <ChevronRight className="w-4 h-4 text-slate-400" />
+                    <ChevronRight className={`w-4 h-4 ${active ? "text-medical" : "text-slate-400"}`} />
                   </Link>
                 );
               })}
             </nav>
 
-            <div className="pt-4 border-t border-border-subtle space-y-2.5">
+            <div className="pt-3 border-t border-border-subtle space-y-2.5">
+              <Link
+                href="/contact"
+                onClick={() => setMobileMenuOpen(false)}
+                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold text-white bg-medical hover:bg-medical-hover shadow-xs transition-colors"
+              >
+                <Phone className="w-4 h-4" />
+                <span>Contact New Life Clinic</span>
+              </Link>
               <Link
                 href="/clinic-login"
                 onClick={() => setMobileMenuOpen(false)}
@@ -181,32 +235,26 @@ export default function Header() {
                 <Lock className="w-4 h-4 text-medical" />
                 <span>Clinic Staff Login (CMS)</span>
               </Link>
-              <Link
-                href="/contact"
-                onClick={() => setMobileMenuOpen(false)}
-                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold text-white bg-medical hover:bg-medical-hover transition-colors"
-              >
-                <Phone className="w-4 h-4" />
-                <span>Contact New Life Clinic</span>
-              </Link>
 
-              <div className="flex items-center justify-between pt-2 text-xs">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between pt-2 gap-2 text-xs border-t border-slate-100">
                 <button
+                  type="button"
                   onClick={() => {
                     setMobileMenuOpen(false);
                     setIsChecklistOpen(true);
                   }}
-                  className="text-teal font-medium hover:underline inline-flex items-center gap-1"
+                  className="text-teal font-medium hover:underline inline-flex items-center gap-1 cursor-pointer text-left"
                 >
-                  <ShieldCheck className="w-3.5 h-3.5" />
-                  Doctor Verification Checklist
+                  <ShieldCheck className="w-3.5 h-3.5 shrink-0" />
+                  <span>Doctor Verification Checklist</span>
                 </button>
                 <button
+                  type="button"
                   onClick={() => {
                     setMobileMenuOpen(false);
                     setIsPhase2Open(true);
                   }}
-                  className="text-charcoal-muted hover:text-navy"
+                  className="text-charcoal-muted hover:text-navy cursor-pointer text-left"
                 >
                   Phase 2 CMS Roadmap
                 </button>
@@ -228,3 +276,4 @@ export default function Header() {
     </>
   );
 }
+

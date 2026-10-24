@@ -87,6 +87,11 @@ export default function Footer() {
                 </Link>
               </li>
               <li>
+                <Link href="/appointments" className="hover:text-white transition-colors">
+                  Appointments & OPD Queue
+                </Link>
+              </li>
+              <li>
                 <Link href="/contact" className="hover:text-white transition-colors">
                   Contact & Directions
                 </Link>
