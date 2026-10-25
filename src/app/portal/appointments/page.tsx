@@ -45,6 +45,8 @@ interface Appointment {
   status: "SCHEDULED" | "CHECKED_IN" | "WAITING" | "IN_CONSULTATION" | "COMPLETED" | "CANCELLED" | "NO_SHOW";
   consultationType: string;
   reasonForVisit: string;
+  tokenCode?: string;
+  tokenNumber?: number;
   notes?: string;
   patient?: Patient;
 }
@@ -70,9 +72,11 @@ const OPD_SLOTS = [
   "08:00 PM", "08:20 PM", "08:40 PM"
 ];
 
+const getTodayDateString = () => new Date().toISOString().split("T")[0];
+
 function AppointmentsQueueContent() {
   const [activeTab, setActiveTab] = useState<"QUEUE" | "SCHEDULE">("QUEUE");
-  const [selectedDate, setSelectedDate] = useState<string>("2026-10-24");
+  const [selectedDate, setSelectedDate] = useState<string>(getTodayDateString);
   const [statusFilter, setStatusFilter] = useState<string>("ALL");
   
   const [queue, setQueue] = useState<QueueEntry[]>([]);
@@ -89,12 +93,12 @@ function AppointmentsQueueContent() {
   // New Appointment Form State
   const [newApptData, setNewApptData] = useState({
     patientId: "",
-    appointmentDate: "2026-10-24",
+    appointmentDate: getTodayDateString(),
     appointmentTime: "05:00 PM",
     consultationType: "NEW_CONSULTATION",
     reasonForVisit: "",
     notes: "",
-    checkInImmediately: false,
+    checkInImmediately: true,
     priority: "NORMAL"
   });
 
@@ -107,9 +111,11 @@ function AppointmentsQueueContent() {
   const loadData = async () => {
     try {
       setLoading(true);
+      const queueUrl = selectedDate === "ALL" ? "/api/queue?date=ALL" : `/api/queue?date=${selectedDate}`;
+      const apptsUrl = selectedDate === "ALL" ? "/api/appointments" : `/api/appointments?date=${selectedDate}`;
       const [queueRes, apptsRes, patientsRes] = await Promise.all([
-        fetch(`/api/queue?date=${selectedDate}`),
-        fetch(`/api/appointments?date=${selectedDate}`),
+        fetch(queueUrl),
+        fetch(apptsUrl),
         fetch("/api/patients")
       ]);
 
@@ -174,12 +180,13 @@ function AppointmentsQueueContent() {
           patientId: appt.patientId,
           appointmentId: appt.id,
           doctorId: appt.doctorId,
-          priority: "NORMAL"
+          priority: "NORMAL",
+          date: appt.appointmentDate || (selectedDate !== "ALL" ? selectedDate : getTodayDateString())
         })
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to check in.");
-      setActionMessage({ text: `Token ${data.queueEntry.tokenCode} issued for ${appt.patient?.fullName}!`, type: "success" });
+      setActionMessage({ text: `Ticket ${data.queueEntry.tokenCode} assigned to ${appt.patient?.fullName || "patient"}!`, type: "success" });
       loadData();
     } catch (err: unknown) {
       const e = err as Error;
@@ -195,30 +202,40 @@ function AppointmentsQueueContent() {
     }
 
     try {
+      const targetDate = newApptData.appointmentDate || getTodayDateString();
       const res = await fetch("/api/appointments", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(newApptData)
+        body: JSON.stringify({
+          ...newApptData,
+          appointmentDate: targetDate
+        })
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Scheduling failed.");
 
       setActionMessage({ 
-        text: `Appointment scheduled successfully! ${data.queueToken ? `Token ${data.queueToken.tokenCode} issued.` : ""}`, 
+        text: `Appointment scheduled successfully for ${targetDate}! ${data.queueToken ? `Ticket ${data.queueToken.tokenCode} assigned.` : ""}`, 
         type: "success" 
       });
       setShowBookModal(false);
       setNewApptData({
         patientId: "",
-        appointmentDate: selectedDate,
+        appointmentDate: targetDate,
         appointmentTime: "05:00 PM",
         consultationType: "NEW_CONSULTATION",
         reasonForVisit: "",
         notes: "",
-        checkInImmediately: false,
+        checkInImmediately: true,
         priority: "NORMAL"
       });
-      loadData();
+      
+      // Auto-switch selected view date to the booked appointment date so it immediately appears
+      if (selectedDate !== "ALL" && selectedDate !== targetDate) {
+        setSelectedDate(targetDate);
+      } else {
+        loadData();
+      }
     } catch (err: unknown) {
       const e = err as Error;
       setActionMessage({ text: e.message, type: "error" });
@@ -340,19 +357,29 @@ function AppointmentsQueueContent() {
         </div>
 
         {/* Date Selector */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <label className="text-xs font-bold text-slate-500 uppercase tracking-wide">Date:</label>
           <input
             type="date"
-            value={selectedDate}
-            onChange={(e) => setSelectedDate(e.target.value)}
+            value={selectedDate === "ALL" ? "" : selectedDate}
+            onChange={(e) => setSelectedDate(e.target.value || getTodayDateString())}
             className="px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#1769D2]"
           />
           <button
-            onClick={() => setSelectedDate("2026-10-24")}
-            className="px-2.5 py-1.5 text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl transition-colors"
+            onClick={() => setSelectedDate(getTodayDateString())}
+            className={`px-2.5 py-1.5 text-xs font-semibold rounded-xl transition-colors ${
+              selectedDate === getTodayDateString() ? "bg-[#1769D2] text-white font-bold" : "bg-slate-100 hover:bg-slate-200 text-slate-700"
+            }`}
           >
             Today
+          </button>
+          <button
+            onClick={() => setSelectedDate("ALL")}
+            className={`px-2.5 py-1.5 text-xs font-semibold rounded-xl transition-colors ${
+              selectedDate === "ALL" ? "bg-[#12304A] text-white font-bold" : "bg-slate-100 hover:bg-slate-200 text-slate-700"
+            }`}
+          >
+            All Dates
           </button>
         </div>
       </div>
@@ -607,13 +634,18 @@ function AppointmentsQueueContent() {
                       </td>
 
                       <td className="py-3.5 px-4 text-right space-x-2 whitespace-nowrap">
-                        {a.status === "SCHEDULED" && (
+                        {a.tokenCode && (
+                          <span className="px-2.5 py-1 bg-amber-50 text-amber-800 border border-amber-300 font-black text-xs rounded-lg inline-flex items-center gap-1 shadow-xs">
+                            <Ticket className="w-3.5 h-3.5 text-amber-600" /> Ticket {a.tokenCode}
+                          </span>
+                        )}
+                        {a.status === "SCHEDULED" && !a.tokenCode && (
                           <button
                             onClick={() => handleCheckInAppointment(a)}
-                            className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-lg transition-colors inline-flex items-center gap-1"
-                            title="Check-in and issue queue token"
+                            className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-lg transition-colors inline-flex items-center gap-1 shadow-xs"
+                            title="Assign a ticket of the day and add to live queue"
                           >
-                            <Ticket className="w-3.5 h-3.5" /> Check In
+                            <Ticket className="w-3.5 h-3.5" /> Assign Ticket
                           </button>
                         )}
                         <button

@@ -932,17 +932,17 @@ class ClinicDatabase {
   }
 
   // Appointments
-  listAppointments(date?: string, doctorId?: string, status?: AppointmentStatus): Appointment[] {
+  listAppointments(date?: string, doctorId?: string, status?: AppointmentStatus | "ALL"): Appointment[] {
     const db = this.loadDatabase();
     let results = [...db.appointments];
 
-    if (date) {
+    if (date && date !== "ALL") {
       results = results.filter(a => a.appointmentDate === date);
     }
-    if (doctorId) {
+    if (doctorId && doctorId !== "ALL") {
       results = results.filter(a => a.doctorId === doctorId);
     }
-    if (status) {
+    if (status && status !== "ALL") {
       results = results.filter(a => a.status === status);
     }
 
@@ -1002,10 +1002,16 @@ class ClinicDatabase {
   // Queue Management
   getTodayQueue(doctorId?: string, dateStr?: string): (QueueEntry & { patient?: Patient; appointment?: Appointment })[] {
     const db = this.loadDatabase();
-    const targetDate = dateStr || new Date().toISOString().split("T")[0];
+    let entries = [...db.queue];
 
-    let entries = db.queue.filter(q => q.queueDate === targetDate);
-    if (doctorId) {
+    if (dateStr && dateStr !== "ALL") {
+      entries = entries.filter(q => q.queueDate === dateStr);
+    } else if (!dateStr) {
+      const todayStr = new Date().toISOString().split("T")[0];
+      entries = entries.filter(q => q.queueDate === todayStr);
+    }
+
+    if (doctorId && doctorId !== "ALL") {
       entries = entries.filter(q => q.doctorId === doctorId);
     }
 
@@ -1018,12 +1024,29 @@ class ClinicDatabase {
       .sort((a, b) => a.tokenNumber - b.tokenNumber);
   }
 
-  createQueueToken(patientId: string, appointmentId?: string, doctorId = "usr_doctor_01", priority: "NORMAL" | "URGENT" | "INFANT_PRIORITY" = "NORMAL"): QueueEntry {
+  createQueueToken(
+    patientId: string, 
+    appointmentId?: string, 
+    doctorId = "usr_doctor_01", 
+    priority: "NORMAL" | "URGENT" | "INFANT_PRIORITY" = "NORMAL",
+    customDate?: string
+  ): QueueEntry {
     const db = this.loadDatabase();
-    const todayStr = new Date().toISOString().split("T")[0];
 
-    const todayTokens = db.queue.filter(q => q.queueDate === todayStr);
-    const nextNum = todayTokens.length + 1;
+    // Dynamically derive queue date from customDate, appointment date, or current date
+    let queueDate = customDate;
+    if (!queueDate && appointmentId) {
+      const apt = db.appointments.find(a => a.id === appointmentId);
+      if (apt?.appointmentDate) {
+        queueDate = apt.appointmentDate;
+      }
+    }
+    if (!queueDate) {
+      queueDate = new Date().toISOString().split("T")[0];
+    }
+
+    const dateTokens = db.queue.filter(q => q.queueDate === queueDate);
+    const nextNum = dateTokens.length + 1;
     const tokenCode = `T-${String(nextNum).padStart(2, "0")}`;
 
     const newEntry: QueueEntry = {
@@ -1034,7 +1057,7 @@ class ClinicDatabase {
       appointmentId,
       doctorId,
       queueStatus: "WAITING",
-      queueDate: todayStr,
+      queueDate,
       checkInTime: new Date().toISOString(),
       priorityLevel: priority,
       clinicId: "NLC-BHUBANESWAR",
@@ -1044,7 +1067,7 @@ class ClinicDatabase {
 
     db.queue.push(newEntry);
 
-    // If appointment exists, update status to CHECKED_IN / WAITING
+    // If appointment exists, update status to WAITING and assign token info
     if (appointmentId) {
       const aptIndex = db.appointments.findIndex(a => a.id === appointmentId);
       if (aptIndex !== -1) {

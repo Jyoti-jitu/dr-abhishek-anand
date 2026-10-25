@@ -31,7 +31,8 @@ export async function POST(req: NextRequest) {
     const currentUser = authResult.user;
 
     const body = await req.json();
-    const { patientId, appointmentId, doctorId = "usr_doctor_01", priority = "NORMAL" } = body;
+    const priority = body.priorityLevel || body.priority || "NORMAL";
+    const { patientId, appointmentId, doctorId = "usr_doctor_01", date } = body;
 
     if (!patientId) {
       return NextResponse.json({ error: "Patient ID is required." }, { status: 400 });
@@ -42,7 +43,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Patient not found." }, { status: 404 });
     }
 
-    const newEntry = clinicDb.createQueueToken(patient.id, appointmentId, doctorId, priority);
+    const newEntry = clinicDb.createQueueToken(patient.id, appointmentId, doctorId, priority, date);
 
     clinicDb.logAudit(
       "QUEUE_CHECKIN",

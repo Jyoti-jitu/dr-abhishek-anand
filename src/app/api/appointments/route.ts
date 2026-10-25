@@ -90,7 +90,10 @@ export async function POST(req: NextRequest) {
     // If walk-in / immediate check-in
     let queueToken = null;
     if (checkInImmediately) {
-      queueToken = clinicDb.createQueueToken(patient.id, newAppointment.id, doctorId, "NORMAL");
+      queueToken = clinicDb.createQueueToken(patient.id, newAppointment.id, doctorId, "NORMAL", appointmentDate);
+      newAppointment.tokenCode = queueToken.tokenCode;
+      newAppointment.tokenNumber = queueToken.tokenNumber;
+      newAppointment.status = "WAITING";
     }
 
     clinicDb.logAudit(
