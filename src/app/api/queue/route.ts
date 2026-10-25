@@ -54,6 +54,8 @@ export async function POST(req: NextRequest) {
       newEntry.id
     );
 
+    await clinicDb.flushPendingWrites();
+
     return NextResponse.json({
       success: true,
       queueEntry: newEntry,
@@ -94,6 +96,8 @@ export async function PUT(req: NextRequest) {
       currentUser.fullName,
       updated.id
     );
+
+    await clinicDb.flushPendingWrites();
 
     return NextResponse.json({
       success: true,

@@ -80,6 +80,8 @@ export async function PUT(req: NextRequest, { params }: RouteParams) {
       patient.id
     );
 
+    await clinicDb.flushPendingWrites();
+
     return NextResponse.json({
       success: true,
       patient: updated,

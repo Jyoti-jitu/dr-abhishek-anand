@@ -127,6 +127,8 @@ export async function POST(req: NextRequest) {
       newInvoice.id
     );
 
+    await clinicDb.flushPendingWrites();
+
     const enrichedInvoice = {
       ...newInvoice,
       patient

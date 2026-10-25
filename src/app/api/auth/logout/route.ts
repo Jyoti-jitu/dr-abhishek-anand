@@ -15,6 +15,7 @@ export async function POST() {
         user.fullName,
         user.id
       );
+      await clinicDb.flushPendingWrites();
     }
     await destroySession();
     return NextResponse.json({ success: true, message: "Logged out successfully" });

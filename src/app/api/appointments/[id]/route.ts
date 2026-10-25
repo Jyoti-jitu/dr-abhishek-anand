@@ -50,6 +50,8 @@ export async function PUT(req: NextRequest, { params }: RouteParams) {
       appointment.id
     );
 
+    await clinicDb.flushPendingWrites();
+
     return NextResponse.json({
       success: true,
       appointment: updated,

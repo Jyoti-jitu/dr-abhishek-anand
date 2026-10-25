@@ -41,6 +41,7 @@ export async function getAuthenticatedUser(): Promise<User | null> {
     const payload = verifySessionToken(token);
     if (!payload) return null;
 
+    await clinicDb.ensureLoaded();
     const user = clinicDb.getUserById(payload.userId);
     if (!user || !user.isActive) return null;
 

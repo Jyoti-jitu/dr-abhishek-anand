@@ -15,6 +15,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    await clinicDb.ensureLoaded(true);
     const user = clinicDb.getUserByUsername(username);
     if (!user) {
       return NextResponse.json(
@@ -42,6 +43,7 @@ export async function POST(req: NextRequest) {
       user.fullName,
       user.id
     );
+    await clinicDb.flushPendingWrites();
 
     const { passwordHash, salt, ...safeUser } = user;
     return NextResponse.json({

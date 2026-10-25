@@ -72,6 +72,8 @@ export async function PUT(req: NextRequest, { params }: RouteParams) {
       consultation.id
     );
 
+    await clinicDb.flushPendingWrites();
+
     return NextResponse.json({
       success: true,
       consultation: updated,

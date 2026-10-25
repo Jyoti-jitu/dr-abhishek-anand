@@ -42,6 +42,8 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       updated.id
     );
 
+    await clinicDb.flushPendingWrites();
+
     return NextResponse.json({
       success: true,
       invoice: updated,

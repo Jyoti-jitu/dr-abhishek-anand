@@ -1,6 +1,8 @@
 import fs from "fs";
 import path from "path";
 import os from "os";
+import { getMongoDb } from "./mongodb";
+import type { Db } from "mongodb";
 import { 
   ClinicDatabaseState, 
   User, 
@@ -647,48 +649,145 @@ function getInitialSeedData(): ClinicDatabaseState {
 
 class ClinicDatabase {
   private state: ClinicDatabaseState | null = null;
+  private lastLoadedAt: number = 0;
+  private loadPromise: Promise<ClinicDatabaseState> | null = null;
+  private pendingWrites: Promise<unknown>[] = [];
 
-  private loadDatabase(): ClinicDatabaseState {
-    if (this.state) return this.state;
+  /**
+   * Queue an asynchronous write operation to MongoDB Atlas.
+   */
+  queueMongoWrite(writeOp: (db: Db) => Promise<unknown>): Promise<unknown> {
+    const p = getMongoDb()
+      .then(writeOp)
+      .catch(err => {
+        console.error("MongoDB Atlas persistence error:", err);
+      });
 
+    this.pendingWrites.push(p);
+    p.finally(() => {
+      const idx = this.pendingWrites.indexOf(p);
+      if (idx !== -1) this.pendingWrites.splice(idx, 1);
+    });
+    return p;
+  }
+
+  /**
+   * Waits for all pending asynchronous writes to MongoDB Atlas to complete.
+   */
+  async flushPendingWrites(): Promise<void> {
+    if (this.pendingWrites.length > 0) {
+      await Promise.allSettled([...this.pendingWrites]);
+    }
+  }
+
+  /**
+   * Asynchronously loads the latest database state from MongoDB Atlas.
+   * If MongoDB is empty, automatically seeds it from the clinic seed dataset.
+   * Caches in memory for fast synchronous queries within requests.
+   */
+  async ensureLoaded(force = false): Promise<ClinicDatabaseState> {
+    if (!force && this.state && (Date.now() - this.lastLoadedAt < 10000)) {
+      return this.state;
+    }
+
+    if (this.loadPromise) {
+      return this.loadPromise;
+    }
+
+    this.loadPromise = (async () => {
+      try {
+        const db = await getMongoDb();
+        const [users, patients, appointments, queue, consultations, prescriptions, documents, invoices, auditLogs, settings] = await Promise.all([
+          db.collection<User>("users").find({}, { projection: { _id: 0 } }).toArray(),
+          db.collection<Patient>("patients").find({}, { projection: { _id: 0 } }).toArray(),
+          db.collection<Appointment>("appointments").find({}, { projection: { _id: 0 } }).toArray(),
+          db.collection<QueueEntry>("queue").find({}, { projection: { _id: 0 } }).toArray(),
+          db.collection<Consultation>("consultations").find({}, { projection: { _id: 0 } }).toArray(),
+          db.collection<Prescription>("prescriptions").find({}, { projection: { _id: 0 } }).toArray(),
+          db.collection<PatientDocument>("documents").find({}, { projection: { _id: 0 } }).toArray(),
+          db.collection<Invoice>("invoices").find({}, { projection: { _id: 0 } }).toArray(),
+          db.collection<AuditLog>("audit_logs").find({}, { projection: { _id: 0 } }).sort({ timestamp: -1 }).limit(500).toArray(),
+          db.collection<ClinicSetting>("settings").findOne({}, { projection: { _id: 0 } })
+        ]);
+
+        if (users && users.length > 0) {
+          this.state = {
+            users,
+            patients,
+            appointments,
+            queue,
+            consultations,
+            prescriptions,
+            documents,
+            invoices,
+            auditLogs,
+            settings: (settings as ClinicSetting) || getInitialSeedData().settings
+          };
+          this.lastLoadedAt = Date.now();
+          return this.state;
+        }
+
+        // If MongoDB Atlas is empty, automatically seed it
+        const initial = this.loadLocalDatabase();
+        await Promise.all([
+          initial.users.length ? db.collection("users").insertMany(initial.users) : Promise.resolve(),
+          initial.patients.length ? db.collection("patients").insertMany(initial.patients) : Promise.resolve(),
+          initial.appointments.length ? db.collection("appointments").insertMany(initial.appointments) : Promise.resolve(),
+          initial.queue.length ? db.collection("queue").insertMany(initial.queue) : Promise.resolve(),
+          initial.consultations.length ? db.collection("consultations").insertMany(initial.consultations) : Promise.resolve(),
+          initial.prescriptions.length ? db.collection("prescriptions").insertMany(initial.prescriptions) : Promise.resolve(),
+          initial.documents.length ? db.collection("documents").insertMany(initial.documents) : Promise.resolve(),
+          initial.invoices.length ? db.collection("invoices").insertMany(initial.invoices) : Promise.resolve(),
+          initial.auditLogs.length ? db.collection("audit_logs").insertMany(initial.auditLogs) : Promise.resolve(),
+          db.collection("settings").replaceOne({ id: initial.settings.id }, initial.settings, { upsert: true })
+        ]);
+
+        this.state = initial;
+        this.lastLoadedAt = Date.now();
+        return this.state;
+      } catch (err) {
+        console.warn("MongoDB Atlas load failed, falling back to local storage:", err);
+        this.state = this.loadLocalDatabase();
+        this.lastLoadedAt = Date.now();
+        return this.state;
+      } finally {
+        this.loadPromise = null;
+      }
+    })();
+
+    return this.loadPromise;
+  }
+
+  private loadLocalDatabase(): ClinicDatabaseState {
     const writableFile = getWritableDbFile();
 
-    // 1. Check if the writable file already exists (e.g. in /tmp or local data/)
     if (fs.existsSync(writableFile)) {
       try {
         const raw = fs.readFileSync(writableFile, "utf-8");
-        this.state = JSON.parse(raw);
-        return this.state!;
+        return JSON.parse(raw);
       } catch (err) {
         console.warn("Could not read writable DB file, falling back:", err);
       }
     }
 
-    // 2. If not found in writable path, check if bundled file exists (read-only in /var/task/data/clinic-database.json)
     if (fs.existsSync(BUNDLED_DB_FILE)) {
       try {
         const raw = fs.readFileSync(BUNDLED_DB_FILE, "utf-8");
-        this.state = JSON.parse(raw);
-
-        // Try writing it into writable path (/tmp) so subsequent mutations succeed
+        const parsed = JSON.parse(raw);
         try {
           const dir = path.dirname(writableFile);
           if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-          fs.writeFileSync(writableFile, JSON.stringify(this.state, null, 2), "utf-8");
+          fs.writeFileSync(writableFile, JSON.stringify(parsed, null, 2), "utf-8");
         } catch (writeErr) {
           console.warn("Could not mirror bundled database to writable storage:", writeErr);
         }
-
-        return this.state!;
+        return parsed;
       } catch (err) {
         console.warn("Could not read bundled DB file, falling back to seed data:", err);
       }
     }
 
-    // 3. Fallback to default in-memory seed dataset
     const initial = getInitialSeedData();
-    this.state = initial;
-
     try {
       const dir = path.dirname(writableFile);
       if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
@@ -696,8 +795,13 @@ class ClinicDatabase {
     } catch (writeErr) {
       console.warn("Could not write initial seed data to disk:", writeErr);
     }
-
     return initial;
+  }
+
+  private loadDatabase(): ClinicDatabaseState {
+    if (this.state) return this.state;
+    this.state = this.loadLocalDatabase();
+    return this.state;
   }
 
   private saveDatabase() {
@@ -711,7 +815,6 @@ class ClinicDatabase {
       fs.writeFileSync(writableFile, JSON.stringify(this.state, null, 2), "utf-8");
     } catch (err) {
       console.error("Warning: Could not save database to disk (read-only environment):", err);
-      // In-memory state remains updated for this instance
     }
   }
 
@@ -741,6 +844,7 @@ class ClinicDatabase {
     };
     db.users.push(newUser);
     this.saveDatabase();
+    this.queueMongoWrite(mdb => mdb.collection("users").insertOne({ ...newUser }));
     return newUser;
   }
 
@@ -754,6 +858,7 @@ class ClinicDatabase {
       updatedAt: new Date().toISOString()
     };
     this.saveDatabase();
+    this.queueMongoWrite(mdb => mdb.collection("users").updateOne({ id }, { $set: updates }));
     return db.users[index];
   }
 
@@ -807,6 +912,7 @@ class ClinicDatabase {
 
     db.patients.push(newPatient);
     this.saveDatabase();
+    this.queueMongoWrite(mdb => mdb.collection("patients").insertOne({ ...newPatient }));
     return newPatient;
   }
 
@@ -821,6 +927,7 @@ class ClinicDatabase {
       updatedAt: new Date().toISOString()
     };
     this.saveDatabase();
+    this.queueMongoWrite(mdb => mdb.collection("patients").updateOne({ $or: [{ id }, { patientId: id }] }, { $set: updates }));
     return db.patients[index];
   }
 
@@ -873,6 +980,7 @@ class ClinicDatabase {
 
     db.appointments.push(newAppointment);
     this.saveDatabase();
+    this.queueMongoWrite(mdb => mdb.collection("appointments").insertOne({ ...newAppointment }));
     return newAppointment;
   }
 
@@ -887,6 +995,7 @@ class ClinicDatabase {
       updatedAt: new Date().toISOString()
     };
     this.saveDatabase();
+    this.queueMongoWrite(mdb => mdb.collection("appointments").updateOne({ $or: [{ id }, { appointmentNumber: id }] }, { $set: updates }));
     return db.appointments[index];
   }
 
@@ -947,6 +1056,15 @@ class ClinicDatabase {
     }
 
     this.saveDatabase();
+    this.queueMongoWrite(async mdb => {
+      await mdb.collection("queue").insertOne({ ...newEntry });
+      if (appointmentId) {
+        await mdb.collection("appointments").updateOne(
+          { id: appointmentId },
+          { $set: { status: "WAITING", tokenNumber: nextNum, tokenCode, updatedAt: new Date().toISOString() } }
+        );
+      }
+    });
     return newEntry;
   }
 
@@ -974,6 +1092,25 @@ class ClinicDatabase {
     }
 
     this.saveDatabase();
+    this.queueMongoWrite(async mdb => {
+      await mdb.collection("queue").updateOne(
+        { id },
+        { 
+          $set: { 
+            queueStatus: status, 
+            updatedAt: entry.updatedAt,
+            ...(entry.consultationStartTime ? { consultationStartTime: entry.consultationStartTime } : {}),
+            ...(entry.consultationEndTime ? { consultationEndTime: entry.consultationEndTime } : {})
+          } 
+        }
+      );
+      if (entry.appointmentId) {
+        await mdb.collection("appointments").updateOne(
+          { id: entry.appointmentId },
+          { $set: { status: status === "IN_CONSULTATION" ? "IN_CONSULTATION" : status === "COMPLETED" ? "COMPLETED" : undefined } }
+        );
+      }
+    });
     return entry;
   }
 
@@ -1018,6 +1155,15 @@ class ClinicDatabase {
     }
 
     this.saveDatabase();
+    this.queueMongoWrite(async mdb => {
+      await mdb.collection("consultations").insertOne({ ...newConsultation });
+      if (data.appointmentId) {
+        await mdb.collection("appointments").updateOne(
+          { id: data.appointmentId },
+          { $set: { status: "COMPLETED" } }
+        );
+      }
+    });
     return newConsultation;
   }
 
@@ -1032,6 +1178,7 @@ class ClinicDatabase {
       updatedAt: new Date().toISOString()
     };
     this.saveDatabase();
+    this.queueMongoWrite(mdb => mdb.collection("consultations").updateOne({ id }, { $set: updates }));
     return db.consultations[index];
   }
 
@@ -1069,6 +1216,7 @@ class ClinicDatabase {
 
     db.prescriptions.push(newPrescription);
     this.saveDatabase();
+    this.queueMongoWrite(mdb => mdb.collection("prescriptions").insertOne({ ...newPrescription }));
     return newPrescription;
   }
 
@@ -1089,6 +1237,7 @@ class ClinicDatabase {
     };
     db.documents.push(newDoc);
     this.saveDatabase();
+    this.queueMongoWrite(mdb => mdb.collection("documents").insertOne({ ...newDoc }));
     return newDoc;
   }
 
@@ -1126,6 +1275,7 @@ class ClinicDatabase {
 
     db.invoices.push(newInvoice);
     this.saveDatabase();
+    this.queueMongoWrite(mdb => mdb.collection("invoices").insertOne({ ...newInvoice }));
     return newInvoice;
   }
 
@@ -1148,6 +1298,19 @@ class ClinicDatabase {
 
     inv.updatedAt = new Date().toISOString();
     this.saveDatabase();
+    this.queueMongoWrite(mdb => mdb.collection("invoices").updateOne(
+      { id: invoiceId },
+      { 
+        $set: { 
+          paidAmount: inv.paidAmount, 
+          balanceAmount: inv.balanceAmount, 
+          paymentStatus: inv.paymentStatus, 
+          paymentMethod: inv.paymentMethod, 
+          ...(inv.transactionReference ? { transactionReference: inv.transactionReference } : {}), 
+          updatedAt: inv.updatedAt 
+        } 
+      }
+    ));
     return inv;
   }
 
@@ -1223,6 +1386,7 @@ class ClinicDatabase {
       db.auditLogs.length = 200; // retain latest 200 logs
     }
     this.saveDatabase();
+    this.queueMongoWrite(mdb => mdb.collection("audit_logs").insertOne({ ...log }));
     return log;
   }
 
@@ -1244,6 +1408,11 @@ class ClinicDatabase {
       ...updates
     };
     this.saveDatabase();
+    this.queueMongoWrite(mdb => mdb.collection("settings").replaceOne(
+      { id: db.settings.id },
+      db.settings,
+      { upsert: true }
+    ));
     return db.settings;
   }
 }

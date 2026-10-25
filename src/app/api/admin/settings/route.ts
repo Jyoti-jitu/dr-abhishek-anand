@@ -38,6 +38,8 @@ export async function PUT(req: NextRequest) {
       updated.id
     );
 
+    await clinicDb.flushPendingWrites();
+
     return NextResponse.json({
       success: true,
       settings: updated,

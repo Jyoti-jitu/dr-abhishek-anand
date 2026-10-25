@@ -116,6 +116,8 @@ export async function POST(req: NextRequest) {
       newConsultation.id
     );
 
+    await clinicDb.flushPendingWrites();
+
     return NextResponse.json({
       success: true,
       consultation: newConsultation,

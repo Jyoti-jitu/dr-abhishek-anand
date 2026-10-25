@@ -103,6 +103,8 @@ export async function POST(req: NextRequest) {
       newAppointment.id
     );
 
+    await clinicDb.flushPendingWrites();
+
     return NextResponse.json({
       success: true,
       appointment: newAppointment,
