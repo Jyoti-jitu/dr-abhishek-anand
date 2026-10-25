@@ -1,5 +1,6 @@
 import fs from "fs";
 import path from "path";
+import os from "os";
 import { 
   ClinicDatabaseState, 
   User, 
@@ -20,12 +21,31 @@ import {
 } from "./types";
 import { hashPassword } from "../auth/crypto";
 
-const DATA_DIR = path.join(process.cwd(), "data");
-const DB_FILE = path.join(DATA_DIR, "clinic-database.json");
+// Bundled database path (read-only in serverless/Vercel)
+const BUNDLED_DB_FILE = path.join(process.cwd(), "data", "clinic-database.json");
 
-function ensureDirectoryExists() {
-  if (!fs.existsSync(DATA_DIR)) {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
+/**
+ * Resolves the writable database file path.
+ * On Vercel / AWS Lambda, the root deployment directory (/var/task) is read-only (EROFS).
+ * In serverless environments, writes must go to os.tmpdir() (/tmp).
+ */
+function getWritableDbFile(): string {
+  if (process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME || process.env.LAMBDA_TASK_ROOT) {
+    return path.join(os.tmpdir(), "clinic-database.json");
+  }
+
+  const localDir = path.join(process.cwd(), "data");
+  const localFile = path.join(localDir, "clinic-database.json");
+
+  try {
+    if (!fs.existsSync(localDir)) {
+      fs.mkdirSync(localDir, { recursive: true });
+    }
+    fs.accessSync(localDir, fs.constants.W_OK);
+    return localFile;
+  } catch {
+    // If local directory is not writable (read-only filesystem / container), fallback to /tmp
+    return path.join(os.tmpdir(), "clinic-database.json");
   }
 }
 
@@ -629,32 +649,70 @@ class ClinicDatabase {
   private state: ClinicDatabaseState | null = null;
 
   private loadDatabase(): ClinicDatabaseState {
-    ensureDirectoryExists();
     if (this.state) return this.state;
 
-    if (!fs.existsSync(DB_FILE)) {
-      const initial = getInitialSeedData();
-      fs.writeFileSync(DB_FILE, JSON.stringify(initial, null, 2), "utf-8");
-      this.state = initial;
-      return initial;
+    const writableFile = getWritableDbFile();
+
+    // 1. Check if the writable file already exists (e.g. in /tmp or local data/)
+    if (fs.existsSync(writableFile)) {
+      try {
+        const raw = fs.readFileSync(writableFile, "utf-8");
+        this.state = JSON.parse(raw);
+        return this.state!;
+      } catch (err) {
+        console.warn("Could not read writable DB file, falling back:", err);
+      }
     }
 
-    try {
-      const raw = fs.readFileSync(DB_FILE, "utf-8");
-      this.state = JSON.parse(raw);
-      return this.state!;
-    } catch {
-      const initial = getInitialSeedData();
-      fs.writeFileSync(DB_FILE, JSON.stringify(initial, null, 2), "utf-8");
-      this.state = initial;
-      return initial;
+    // 2. If not found in writable path, check if bundled file exists (read-only in /var/task/data/clinic-database.json)
+    if (fs.existsSync(BUNDLED_DB_FILE)) {
+      try {
+        const raw = fs.readFileSync(BUNDLED_DB_FILE, "utf-8");
+        this.state = JSON.parse(raw);
+
+        // Try writing it into writable path (/tmp) so subsequent mutations succeed
+        try {
+          const dir = path.dirname(writableFile);
+          if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+          fs.writeFileSync(writableFile, JSON.stringify(this.state, null, 2), "utf-8");
+        } catch (writeErr) {
+          console.warn("Could not mirror bundled database to writable storage:", writeErr);
+        }
+
+        return this.state!;
+      } catch (err) {
+        console.warn("Could not read bundled DB file, falling back to seed data:", err);
+      }
     }
+
+    // 3. Fallback to default in-memory seed dataset
+    const initial = getInitialSeedData();
+    this.state = initial;
+
+    try {
+      const dir = path.dirname(writableFile);
+      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+      fs.writeFileSync(writableFile, JSON.stringify(initial, null, 2), "utf-8");
+    } catch (writeErr) {
+      console.warn("Could not write initial seed data to disk:", writeErr);
+    }
+
+    return initial;
   }
 
   private saveDatabase() {
     if (!this.state) return;
-    ensureDirectoryExists();
-    fs.writeFileSync(DB_FILE, JSON.stringify(this.state, null, 2), "utf-8");
+    try {
+      const writableFile = getWritableDbFile();
+      const dir = path.dirname(writableFile);
+      if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
+      }
+      fs.writeFileSync(writableFile, JSON.stringify(this.state, null, 2), "utf-8");
+    } catch (err) {
+      console.error("Warning: Could not save database to disk (read-only environment):", err);
+      // In-memory state remains updated for this instance
+    }
   }
 
   // Users
